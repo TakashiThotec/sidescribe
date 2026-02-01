@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sidescribe - Settings</title>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>⚙️ Sidescribe Settings</h1>
+    </header>
+
+    <form id="settings-form">
+      <!-- Notion API -->
+      <fieldset>
+        <legend>Notion API</legend>
+        <div class="field">
+          <label for="notion-api-key">API Key (Internal Integration Token)</label>
+          <input type="password" id="notion-api-key" placeholder="ntn_...">
+          <p class="hint">
+            <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a>
+            で作成したInternal Integration Tokenを入力
+          </p>
+        </div>
+      </fieldset>
+
+      <!-- Database IDs -->
+      <fieldset>
+        <legend>Database IDs</legend>
+
+        <div class="field">
+          <label for="memo-db-id">📌 Memo Database ID</label>
+          <input type="text" id="memo-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <p class="hint">メモの保存先データベース</p>
+        </div>
+
+        <div class="field">
+          <label for="bank-db-id">💰 Bank Transaction Database ID</label>
+          <input type="text" id="bank-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <p class="hint">住信SBI 入出金履歴の保存先</p>
+        </div>
+
+        <div class="field">
+          <label for="card-db-id">💳 Card Statement Database ID</label>
+          <input type="text" id="card-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <p class="hint">カード明細の保存先</p>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">💾 保存</button>
+        <span id="save-status" class="save-status"></span>
+      </div>
+    </form>
+  </div>
+</body>
+</html>
