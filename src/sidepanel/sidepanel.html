@@ -24,31 +24,279 @@
       <a href="#" id="link-settings">設定画面を開く</a>
     </div>
 
-    <!-- Memo Section -->
-    <section class="section">
-      <h2 class="section-title">Quick Memo</h2>
-      <div class="memo-form">
-        <div class="field">
-          <label for="memo-title">Page Title</label>
-          <input type="text" id="memo-title" readonly>
-        </div>
-        <div class="field">
-          <label for="memo-url">URL</label>
-          <input type="text" id="memo-url" readonly>
-        </div>
-        <div class="field">
-          <label for="memo-note">Note</label>
-          <textarea id="memo-note" rows="3" placeholder="メモを入力..."></textarea>
-        </div>
-        <button id="btn-save-memo" class="btn btn-primary">📌 メモを保存</button>
-      </div>
-    </section>
+    <!-- Tab Bar -->
+    <div id="tab-bar" class="tab-bar">
+      <button class="tab active" data-tab="memo">📌 メモ</button>
+      <button class="tab" data-tab="gaba" style="display:none">📚 Gaba</button>
+      <button class="tab" data-tab="suica" style="display:none">🚃 Suica</button>
+      <button class="tab" data-tab="sbi" style="display:none">💰 SBI</button>
+      <button class="tab" data-tab="card" style="display:none">💳 カード</button>
+    </div>
 
-    <!-- Site-Specific Actions -->
-    <section id="site-actions" class="section" style="display:none;">
-      <h2 class="section-title">Site Actions</h2>
-      <div id="site-actions-content"></div>
-    </section>
+    <!-- Tab Content: Memo -->
+    <div id="tab-memo" class="tab-content active">
+      <section class="section">
+        <h2 class="section-title">Quick Memo</h2>
+        <div class="memo-form">
+          <div class="field">
+            <label for="memo-title">Page Title</label>
+            <input type="text" id="memo-title" readonly>
+          </div>
+          <div class="field">
+            <label for="memo-url">URL</label>
+            <input type="text" id="memo-url" readonly>
+          </div>
+          <div class="field">
+            <label for="memo-note">Note</label>
+            <textarea id="memo-note" rows="3" placeholder="メモを入力..."></textarea>
+          </div>
+          <button id="btn-save-memo" class="btn btn-primary">📌 メモを保存</button>
+        </div>
+      </section>
+
+      <!-- Site-Specific Actions (for non-tab sites) -->
+      <section id="site-actions" class="section" style="display:none;">
+        <h2 class="section-title">Site Actions</h2>
+        <div id="site-actions-content"></div>
+      </section>
+    </div>
+
+    <!-- Tab Content: Gaba -->
+    <div id="tab-gaba" class="tab-content">
+      <!-- Gaba Sub-tabs -->
+      <div class="gaba-subtabs">
+        <button class="gaba-subtab active" data-gaba-tab="reservations">予約</button>
+        <button class="gaba-subtab" data-gaba-tab="completed">終了済み</button>
+      </div>
+
+      <!-- Gaba Reservations -->
+      <div id="gaba-reservations" class="gaba-subtab-content active">
+        <div class="gaba-section-header">
+          <h3>これからの予約</h3>
+          <div class="gaba-header-controls">
+            <a href="https://my.gaba.jp/booking/booklesson" target="_blank" class="gaba-link-btn">予約する</a>
+            <button id="gaba-reload-reservations" class="gaba-reload-btn">更新</button>
+            <label class="gaba-sort-toggle">
+              <input type="checkbox" id="gaba-sort-order" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">早い順</span>
+            </label>
+          </div>
+        </div>
+        <div id="gaba-reservations-list" class="gaba-list">
+          <div class="gaba-loading">予約を読み込み中...</div>
+        </div>
+      </div>
+
+      <!-- Gaba Completed -->
+      <div id="gaba-completed" class="gaba-subtab-content">
+        <div class="gaba-section-header">
+          <h3>終了済みレッスン</h3>
+          <div class="gaba-header-controls">
+            <button id="gaba-reload-completed" class="gaba-reload-btn">更新</button>
+          </div>
+        </div>
+        <div id="gaba-completed-list" class="gaba-list">
+          <div class="gaba-loading">終了済みレッスンを読み込み中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Suica -->
+    <div id="tab-suica" class="tab-content">
+      <!-- 取り込み期間セクション -->
+      <div class="suica-section">
+        <h2>📅 取り込み期間</h2>
+        <div class="suica-form-group">
+          <label>期間選択</label>
+          <div class="suica-date-range">
+            <input type="date" id="suica-start-date" />
+            <span>〜</span>
+            <input type="date" id="suica-end-date" />
+          </div>
+        </div>
+        <div class="suica-reload-row">
+          <button id="suica-reload" class="suica-button secondary">データ更新</button>
+          <span id="suica-status" class="suica-status-inline"></span>
+        </div>
+      </div>
+
+      <!-- 出力設定セクション -->
+      <div class="suica-section">
+        <h2>⚙️ 出力設定</h2>
+        <div class="suica-settings-inline">
+          <div class="suica-form-group">
+            <label for="suica-output-format">出力形式</label>
+            <select id="suica-output-format">
+              <option value="raw">編集なし（元データそのまま）</option>
+              <option value="freee">freee用フォーマット</option>
+              <option value="moneyforward" disabled>MoneyForward用（準備中）</option>
+            </select>
+          </div>
+          <div class="suica-form-group">
+            <label for="suica-date-format">日付形式</label>
+            <select id="suica-date-format">
+              <option value="yyyy-mm-dd">YYYY-MM-DD</option>
+              <option value="yyyy/mm/dd">YYYY/MM/DD</option>
+              <option value="dd/mm/yyyy">DD/MM/YYYY</option>
+            </select>
+          </div>
+          <div class="suica-form-group">
+            <label for="suica-encoding">文字コード</label>
+            <select id="suica-encoding">
+              <option value="utf-8">UTF-8</option>
+              <option value="shift-jis">Shift-JIS</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- プレビューセクション -->
+      <div class="suica-section">
+        <h2>👀 プレビュー</h2>
+        <div class="suica-preview-container">
+          <div class="suica-preview-info">
+            <h3>取得データ</h3>
+            <div class="suica-count" id="suica-count">0件</div>
+          </div>
+          <div class="suica-export-actions">
+            <button id="suica-export-csv" class="suica-button" disabled>CSVエクスポート</button>
+          </div>
+          <div id="suica-preview-area">
+            <div class="suica-no-data">データを自動取得中です...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: SBI -->
+    <div id="tab-sbi" class="tab-content">
+      <div class="sbi-header">
+        <h2>💰 住信SBI 入出金明細</h2>
+      </div>
+
+      <!-- Step 1: ページからデータ取得 -->
+      <div class="sbi-step">
+        <div class="sbi-step-header">
+          <span class="sbi-step-num">1</span>
+          <span class="sbi-step-title">ページから取得</span>
+        </div>
+        <div class="sbi-step-content">
+          <button id="sbi-fetch-page" class="btn btn-secondary">📄 ページから明細を取得</button>
+          <div id="sbi-page-status" class="sbi-status"></div>
+          <div id="sbi-period" class="sbi-period"></div>
+        </div>
+      </div>
+
+      <!-- Step 2: Notionから取得 -->
+      <div class="sbi-step">
+        <div class="sbi-step-header">
+          <span class="sbi-step-num">2</span>
+          <span class="sbi-step-title">Notionと照合</span>
+        </div>
+        <div class="sbi-step-content">
+          <button id="sbi-fetch-notion" class="btn btn-secondary" disabled>🔍 Notionから取得して照合</button>
+          <div id="sbi-notion-status" class="sbi-status"></div>
+        </div>
+      </div>
+
+      <!-- Step 3: 照合結果 -->
+      <div class="sbi-step" id="sbi-result-step" style="display:none;">
+        <div class="sbi-step-header">
+          <span class="sbi-step-num">3</span>
+          <span class="sbi-step-title">照合結果</span>
+        </div>
+        <div class="sbi-step-content">
+          <div class="sbi-summary">
+            <div class="sbi-summary-item new">
+              <span class="sbi-summary-label">新規</span>
+              <span class="sbi-summary-count" id="sbi-new-count">0</span>件
+            </div>
+            <div class="sbi-summary-item existing">
+              <span class="sbi-summary-label">既存</span>
+              <span class="sbi-summary-count" id="sbi-existing-count">0</span>件
+            </div>
+          </div>
+          
+          <!-- 新規取引リスト -->
+          <div class="sbi-list-section">
+            <div class="sbi-list-header">
+              <label class="sbi-checkbox-label">
+                <input type="checkbox" id="sbi-select-all" checked>
+                <span>新規取引をすべて選択</span>
+              </label>
+            </div>
+            <div id="sbi-new-list" class="sbi-transaction-list"></div>
+          </div>
+
+          <!-- Notionに追加ボタン -->
+          <div class="sbi-actions">
+            <button id="sbi-add-to-notion" class="btn btn-primary" disabled>
+              📤 選択した取引をNotionに追加
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- プレビューエリア（デバッグ用） -->
+      <details class="sbi-preview-details">
+        <summary>取得データプレビュー</summary>
+        <div id="sbi-preview" class="sbi-preview"></div>
+      </details>
+    </div>
+
+    <!-- Tab Content: Card -->
+    <div id="tab-card" class="tab-content">
+      <div class="card-header">
+        <h2>💳 カード引き落とし額</h2>
+        <div class="card-header-actions">
+          <button id="card-fetch-current" class="card-reload-btn">現ページから取得</button>
+          <button id="card-clear-all" class="card-clear-btn" title="すべてクリア">🗑</button>
+        </div>
+      </div>
+      
+      <!-- カード会社判定（現在のページ） -->
+      <div id="card-company-info" class="card-company-info"></div>
+      
+      <!-- ストックされたカードグループリスト -->
+      <div id="card-groups-container" class="card-groups-container">
+        <div class="card-empty-stock">
+          <p>📭 ストックされたデータはありません</p>
+          <p class="card-empty-hint">カード会社のページで「現ページから取得」を押すとデータがストックされます</p>
+        </div>
+      </div>
+      
+      <!-- 一括操作セクション -->
+      <div id="card-batch-section" class="card-batch-section" style="display:none;">
+        <div class="card-batch-header">
+          <h3>📤 一括操作</h3>
+          <span id="card-batch-count" class="card-batch-count">0件選択中</span>
+        </div>
+        
+        <!-- 一括重複チェック結果 -->
+        <div id="card-batch-result" class="card-batch-result" style="display:none;">
+          <div class="card-batch-summary">
+            <div class="card-batch-summary-item new">
+              <span class="card-batch-summary-label">新規</span>
+              <span id="card-batch-new-count" class="card-batch-summary-count">0</span>件
+            </div>
+            <div class="card-batch-summary-item duplicate">
+              <span class="card-batch-summary-label">重複</span>
+              <span id="card-batch-duplicate-count" class="card-batch-summary-count">0</span>件
+            </div>
+          </div>
+        </div>
+        
+        <!-- アクションボタン -->
+        <div class="card-batch-actions">
+          <button id="card-batch-check" class="btn btn-secondary">🔍 一括重複チェック</button>
+          <button id="card-batch-add" class="btn btn-primary" disabled>📤 選択をNotionに追加</button>
+        </div>
+      </div>
+      
+      <!-- ステータス表示 -->
+      <div id="card-status" class="card-status"></div>
+    </div>
 
     <!-- Toast -->
     <div id="toast" class="toast" style="display:none;"></div>

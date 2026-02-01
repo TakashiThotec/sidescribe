@@ -29,23 +29,126 @@
       <fieldset>
         <legend>Database IDs</legend>
 
-        <div class="field">
-          <label for="memo-db-id">📌 Memo Database ID</label>
-          <input type="text" id="memo-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-          <p class="hint">メモの保存先データベース</p>
+        <!-- Memo DB -->
+        <div class="db-section" id="memo-section">
+          <div class="field">
+            <label for="memo-db-id">📌 Memo Database ID</label>
+            <input type="text" id="memo-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <p class="hint">メモの保存先データベース</p>
+          </div>
+          <button type="button" class="btn-fetch-schema" id="memo-fetch-schema">🔄 スキーマ取得</button>
+          <div class="mapping-panel" id="memo-mapping" style="display: none;">
+            <div class="mapping-field">
+              <label>タイトル (title)</label>
+              <select id="memo-map-title"></select>
+            </div>
+            <div class="mapping-field">
+              <label>URL (url)</label>
+              <select id="memo-map-url"></select>
+            </div>
+            <div class="mapping-field">
+              <label>メモ (rich_text)</label>
+              <select id="memo-map-note"></select>
+            </div>
+            <div class="mapping-field">
+              <label>作成日時 (date)</label>
+              <select id="memo-map-created"></select>
+            </div>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="bank-db-id">💰 Bank Transaction Database ID</label>
-          <input type="text" id="bank-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-          <p class="hint">住信SBI 入出金履歴の保存先</p>
+        <!-- Bank DB -->
+        <div class="db-section" id="bank-section">
+          <div class="field">
+            <label for="bank-db-id">💰 Bank Transaction Database ID</label>
+            <input type="text" id="bank-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <p class="hint">住信SBI 入出金履歴の保存先</p>
+          </div>
+          <button type="button" class="btn-fetch-schema" id="bank-fetch-schema">🔄 スキーマ取得</button>
+          <div class="mapping-panel" id="bank-mapping" style="display: none;">
+            <div class="mapping-field">
+              <label>record: 取引内容 (title)</label>
+              <select id="bank-map-record"></select>
+            </div>
+            <div class="mapping-field">
+              <label>date: 日付 (date)</label>
+              <select id="bank-map-date"></select>
+            </div>
+            <div class="mapping-field">
+              <label>value: 金額 (number)</label>
+              <select id="bank-map-value"></select>
+            </div>
+            <div class="mapping-field">
+              <label>flow: in/out (select)</label>
+              <select id="bank-map-flow"></select>
+            </div>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="card-db-id">💳 Card Statement Database ID</label>
-          <input type="text" id="card-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-          <p class="hint">カード明細の保存先</p>
+        <!-- Card DB -->
+        <div class="db-section" id="card-section">
+          <div class="field">
+            <label for="card-db-id">💳 Card Statement Database ID</label>
+            <input type="text" id="card-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <p class="hint">カード明細の保存先</p>
+          </div>
+          <button type="button" class="btn-fetch-schema" id="card-fetch-schema">🔄 スキーマ取得</button>
+          <div class="mapping-panel" id="card-mapping" style="display: none;">
+            <div class="mapping-field">
+              <label>摘要 (title)</label>
+              <select id="card-map-description"></select>
+            </div>
+            <div class="mapping-field">
+              <label>日付 (date)</label>
+              <select id="card-map-date"></select>
+            </div>
+            <div class="mapping-field">
+              <label>金額 (number)</label>
+              <select id="card-map-amount"></select>
+            </div>
+            <div class="mapping-field">
+              <label>カード名 (rich_text)</label>
+              <select id="card-map-cardname"></select>
+            </div>
+            <div class="mapping-field">
+              <label>カテゴリ (rich_text)</label>
+              <select id="card-map-category"></select>
+            </div>
+          </div>
         </div>
+
+        <!-- Gaba DB -->
+        <div class="db-section" id="gaba-section">
+          <div class="field">
+            <label for="gaba-db-id">📚 Gaba Lesson Database ID</label>
+            <input type="text" id="gaba-db-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <p class="hint">Gabaレッスン履歴の保存先</p>
+          </div>
+          <button type="button" class="btn-fetch-schema" id="gaba-fetch-schema">🔄 スキーマ取得</button>
+          <div class="mapping-panel" id="gaba-mapping" style="display: none;">
+            <div class="mapping-field">
+              <label>タイトル (title)</label>
+              <select id="gaba-map-title"></select>
+            </div>
+            <div class="mapping-field">
+              <label>日時 (date)</label>
+              <select id="gaba-map-date"></select>
+            </div>
+            <div class="mapping-field">
+              <label>時間 (rich_text)</label>
+              <select id="gaba-map-time"></select>
+            </div>
+            <div class="mapping-field">
+              <label>LS (rich_text)</label>
+              <select id="gaba-map-ls"></select>
+            </div>
+            <div class="mapping-field">
+              <label>ステータス (select)</label>
+              <select id="gaba-map-status"></select>
+            </div>
+          </div>
+        </div>
+
       </fieldset>
 
       <div class="actions">

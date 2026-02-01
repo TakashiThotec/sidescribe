@@ -7,10 +7,19 @@
     "sidePanel",
     "activeTab",
     "storage",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
-    "https://api.notion.com/*"
+    "https://api.notion.com/*",
+    "https://www.netbk.co.jp/*",
+    "https://*.gabaonline.jp/*",
+    "https://my.gaba.jp/*",
+    "https://*.jreast.co.jp/*",
+    "https://www.mobilesuica.com/*",
+    "https://global.americanexpress.com/*",
+    "https://*.americanexpress.com/*",
+    "https://www.smbc-card.com/*"
   ],
   "background": {
     "service_worker": "service-worker.js"
@@ -22,7 +31,13 @@
     {
       "matches": [
         "https://www.netbk.co.jp/*",
-        "https://*.gabaonline.jp/*"
+        "https://*.gabaonline.jp/*",
+        "https://my.gaba.jp/*",
+        "https://*.jreast.co.jp/*",
+        "https://www.mobilesuica.com/*",
+        "https://global.americanexpress.com/*",
+        "https://*.americanexpress.com/*",
+        "https://www.smbc-card.com/*"
       ],
       "js": ["content.js"]
     }

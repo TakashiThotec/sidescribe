@@ -86,6 +86,55 @@ body {
   font-weight: 600;
 }
 
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  background: #f0f0f0;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #333;
+}
+
+.tab.active {
+  background: #fff;
+  color: #2f80ed;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Tab Content ── */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.tab-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}
+
 /* ── Section ── */
 .section {
   background: #fff;
@@ -252,4 +301,1539 @@ body {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   Gaba Tab Styles
+   ══════════════════════════════════════════════════════════ */
+
+/* Gaba Sub-tabs */
+.gaba-subtabs {
+  display: flex;
+  gap: 2px;
+  background: #e9ecef;
+  padding: 3px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.gaba-subtab {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gaba-subtab:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #495057;
+}
+
+.gaba-subtab.active {
+  background: #fff;
+  color: #00a33e;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Gaba Subtab Content */
+.gaba-subtab-content {
+  display: none;
+}
+
+.gaba-subtab-content.active {
+  display: block;
+}
+
+/* Gaba Section Header */
+.gaba-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.gaba-section-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0;
+}
+
+.gaba-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Gaba Link Button */
+.gaba-link-btn {
+  display: inline-block;
+  background: #00a33e;
+  color: white;
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.gaba-link-btn:hover {
+  background: #008c35;
+}
+
+/* Gaba Reload Button */
+.gaba-reload-btn {
+  background: #00a33e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gaba-reload-btn:hover {
+  background: #008c35;
+}
+
+.gaba-reload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Gaba Sort Toggle */
+.gaba-sort-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #666;
+}
+
+.gaba-sort-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.gaba-sort-toggle .toggle-slider {
+  position: relative;
+  width: 32px;
+  height: 16px;
+  background: #ccc;
+  border-radius: 16px;
+  transition: background 0.2s;
+}
+
+.gaba-sort-toggle .toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.gaba-sort-toggle input:checked + .toggle-slider {
+  background: #00a33e;
+}
+
+.gaba-sort-toggle input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+
+.gaba-sort-toggle .toggle-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+/* Gaba List */
+.gaba-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gaba-loading {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.gaba-empty {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.gaba-error {
+  text-align: center;
+  padding: 16px;
+  color: #721c24;
+  background: #f8d7da;
+  border-radius: 6px;
+  border: 1px solid #f5c6cb;
+  font-size: 13px;
+}
+
+/* Gaba Lesson Item */
+.gaba-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 10px 12px;
+  transition: all 0.15s;
+}
+
+.gaba-item:hover {
+  border-color: #00a33e;
+  box-shadow: 0 2px 6px rgba(0, 163, 62, 0.1);
+}
+
+.gaba-item-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.gaba-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.gaba-item-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gaba-item-date {
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+.gaba-item-time {
+  font-weight: 600;
+  color: #00a33e;
+  font-size: 13px;
+}
+
+.gaba-item-ls {
+  background: #e7f5ed;
+  color: #00a33e;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Gaba Calendar Actions */
+.gaba-item-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.gaba-calendar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+
+.gaba-calendar-btn.google {
+  background: #00a33e;
+  color: white;
+}
+
+.gaba-calendar-btn.google:hover {
+  background: #008c35;
+}
+
+.gaba-calendar-btn.notion {
+  background: #0a66c2;
+  color: white;
+}
+
+.gaba-calendar-btn.notion:hover {
+  background: #085394;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Suica Tab Styles (suica-history-to-freee style)
+   ══════════════════════════════════════════════════════════ */
+
+/* Suica Status */
+.suica-status {
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  display: none;
+  font-size: 13px;
+}
+
+.suica-status.success {
+  display: block;
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.suica-status.error {
+  display: block;
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.suica-status.warning {
+  display: block;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.suica-status.info {
+  display: block;
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+/* Suica Section */
+.suica-section {
+  margin-bottom: 20px;
+}
+
+.suica-section h2 {
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+/* Suica Form Group */
+.suica-form-group {
+  margin-bottom: 12px;
+}
+
+.suica-form-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: #495057;
+  font-size: 12px;
+}
+
+.suica-form-group input,
+.suica-form-group select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.suica-form-group input:focus,
+.suica-form-group select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+/* Suica Date Range */
+.suica-date-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.suica-date-range input {
+  flex: 1;
+}
+
+.suica-date-range span {
+  color: #6c757d;
+  font-size: 13px;
+}
+
+/* Suica Settings Inline */
+.suica-settings-inline {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.suica-settings-inline .suica-form-group {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 100px;
+}
+
+.suica-settings-inline .suica-form-group label {
+  margin-bottom: 3px;
+  font-size: 11px;
+}
+
+.suica-settings-inline .suica-form-group select {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+/* Suica Button */
+.suica-button {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.suica-button:hover {
+  background: #45a049;
+}
+
+.suica-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.suica-button.secondary {
+  background: #6c757d;
+}
+
+.suica-button.secondary:hover {
+  background: #5a6268;
+}
+
+/* Suica Reload Row */
+.suica-reload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Suica Status Inline */
+.suica-status-inline {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.suica-status-inline.success {
+  color: #155724;
+}
+
+.suica-status-inline.error {
+  color: #721c24;
+}
+
+.suica-status-inline.warning {
+  color: #856404;
+}
+
+.suica-status-inline.info {
+  color: #0c5460;
+}
+
+/* Suica Preview Container */
+.suica-preview-container {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.suica-preview-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.suica-preview-info h3 {
+  margin: 0;
+  color: #495057;
+  font-size: 13px;
+}
+
+.suica-count {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+/* Suica Export Actions */
+.suica-export-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* Suica Preview Area */
+#suica-preview-area {
+  background: white;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.suica-no-data {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 30px;
+  font-size: 13px;
+}
+
+/* Suica Preview Table */
+.suica-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  background: white;
+}
+
+.suica-preview-table th,
+.suica-preview-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.suica-preview-table th {
+  background: #e9ecef;
+  font-weight: 600;
+  color: #495057;
+}
+
+.suica-preview-table tr:hover {
+  background: #f8f9fa;
+}
+
+.suica-preview-table .amount-negative {
+  color: #dc3545;
+}
+
+.suica-preview-table .amount-positive {
+  color: #28a745;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SBI Bank Section Styles
+   ══════════════════════════════════════════════════════════ */
+
+#sbi-section {
+  margin-top: 12px;
+}
+
+/* SBI Step */
+.sbi-step {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.sbi-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #e9ecef;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.sbi-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: #2f80ed;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 50%;
+}
+
+.sbi-step-title {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+}
+
+.sbi-step-content {
+  padding: 12px;
+}
+
+/* SBI Status */
+.sbi-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.sbi-status.success {
+  color: #155724;
+}
+
+.sbi-status.error {
+  color: #721c24;
+}
+
+.sbi-status.loading {
+  color: #0c5460;
+}
+
+/* SBI Period */
+.sbi-period {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #e7f3ff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #0056b3;
+  display: none;
+}
+
+.sbi-period.show {
+  display: block;
+}
+
+/* SBI Summary */
+.sbi-summary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sbi-summary-item {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.sbi-summary-item.new {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+.sbi-summary-item.existing {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+}
+
+.sbi-summary-label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.sbi-summary-count {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.sbi-summary-item.new .sbi-summary-count {
+  color: #155724;
+}
+
+.sbi-summary-item.existing .sbi-summary-count {
+  color: #495057;
+}
+
+/* SBI List Section */
+.sbi-list-section {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.sbi-list-header {
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.sbi-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #495057;
+}
+
+.sbi-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* SBI Transaction List */
+.sbi-transaction-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.sbi-transaction-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.15s;
+}
+
+.sbi-transaction-item:last-child {
+  border-bottom: none;
+}
+
+.sbi-transaction-item:hover {
+  background: #f8f9fa;
+}
+
+.sbi-transaction-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sbi-transaction-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sbi-transaction-date {
+  font-size: 11px;
+  color: #6c757d;
+}
+
+.sbi-transaction-desc {
+  font-size: 12px;
+  color: #333;
+  word-break: break-all;
+  margin: 2px 0;
+}
+
+.sbi-transaction-amount {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sbi-transaction-amount.deposit {
+  color: #28a745;
+}
+
+.sbi-transaction-amount.withdrawal {
+  color: #dc3545;
+}
+
+/* SBI Actions */
+.sbi-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* SBI Preview Details */
+.sbi-preview-details {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.sbi-preview-details summary {
+  cursor: pointer;
+  color: #6c757d;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.sbi-preview-details summary:hover {
+  background: #e9ecef;
+}
+
+.sbi-preview {
+  margin-top: 8px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* SBI Empty State */
+.sbi-empty {
+  padding: 20px;
+  text-align: center;
+  color: #6c757d;
+  font-size: 13px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Card Tab Styles
+   ══════════════════════════════════════════════════════════ */
+
+/* Card Header */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.card-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.card-reload-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.card-reload-btn:hover {
+  background: #4f46e5;
+}
+
+.card-reload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.card-clear-btn {
+  background: #f1f1f1;
+  color: #666;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.card-clear-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Card Company Info */
+.card-company-info {
+  padding: 8px 12px;
+  background: #f0f4ff;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-company-info.amex {
+  background: #edf7ed;
+  color: #2e7d32;
+}
+
+.card-company-info.smbc {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.card-company-info:empty {
+  display: none;
+}
+
+/* Card Billing List */
+.card-billing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-loading {
+  text-align: center;
+  padding: 30px;
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.card-empty {
+  text-align: center;
+  padding: 30px;
+  color: #6c757d;
+  font-size: 13px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.card-error {
+  text-align: center;
+  padding: 16px;
+  color: #721c24;
+  background: #f8d7da;
+  border-radius: 6px;
+  border: 1px solid #f5c6cb;
+  font-size: 13px;
+}
+
+/* Card Billing Item */
+.card-billing-item {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.15s;
+}
+
+.card-billing-item:hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.card-billing-item.amex {
+  border-left: 3px solid #1e88e5;
+}
+
+.card-billing-item.smbc {
+  border-left: 3px solid #43a047;
+}
+
+.card-billing-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.card-billing-main {
+  flex: 1;
+}
+
+.card-billing-company {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.card-billing-company.amex {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.card-billing-company.smbc {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.card-billing-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.card-billing-date {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.card-billing-status {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+.card-billing-status.confirmed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.card-billing-status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.card-billing-amount-section {
+  text-align: right;
+}
+
+.card-billing-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+
+.card-billing-amount.amex {
+  color: #1565c0;
+}
+
+.card-billing-amount.smbc {
+  color: #2e7d32;
+}
+
+.card-billing-currency {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  margin-left: 2px;
+}
+
+.card-billing-fetched {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+/* Card Status */
+.card-status {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.card-status:empty {
+  display: none;
+}
+
+.card-status.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.card-status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.card-status.info {
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+/* Card Notion Section */
+.card-notion-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+
+.card-notion-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.card-notion-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0;
+}
+
+/* Card Duplicate Warning */
+.card-duplicate-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.card-duplicate-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.card-duplicate-text {
+  flex: 1;
+}
+
+.card-duplicate-text strong {
+  display: block;
+  color: #856404;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.card-duplicate-text p {
+  color: #856404;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Card List Header */
+.card-list-header {
+  padding: 8px 10px;
+  background: #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+/* Card Checkbox Label */
+.card-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.card-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Card Billing Item (in Notion section) */
+.card-duplicate-list .card-billing-item,
+.card-new-list .card-billing-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.card-duplicate-list .card-billing-item.duplicate {
+  border-left: 3px solid #ffc107;
+  background: #fffbf0;
+}
+
+.card-new-list .card-billing-item.new {
+  border-left: 3px solid #28a745;
+}
+
+.card-new-list .card-billing-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.card-duplicate-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #ffc107;
+  color: #856404;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 3px;
+  margin-top: 4px;
+}
+
+/* Card Notion Actions */
+.card-notion-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.card-notion-actions .btn {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Card Groups Container (複数カード対応)
+   ══════════════════════════════════════════════════════════ */
+
+/* Card Groups Container */
+.card-groups-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Empty Stock State */
+.card-empty-stock {
+  text-align: center;
+  padding: 30px 20px;
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  color: #6c757d;
+}
+
+.card-empty-stock p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.card-empty-stock .card-empty-hint {
+  font-size: 11px;
+  color: #adb5bd;
+  margin-top: 8px;
+}
+
+/* Card Group */
+.card-group {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Card Group Header */
+.card-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.card-group-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-group-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.card-group-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
+.card-group-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+}
+
+.card-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-group-fetched {
+  font-size: 10px;
+  color: #adb5bd;
+}
+
+.card-group-remove {
+  background: transparent;
+  border: none;
+  color: #adb5bd;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.card-group-remove:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Card Group Body */
+.card-group-body {
+  padding: 10px 12px;
+}
+
+/* Card Group Items */
+.card-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Card Group Item (個別のカード) */
+.card-group-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #fafafa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.card-group-item:hover {
+  background: #f0f4ff;
+  border-color: #c7d2fe;
+}
+
+.card-group-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.card-group-item-content {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-group-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-group-item-date {
+  font-size: 12px;
+  color: #495057;
+}
+
+.card-group-item-status {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+.card-group-item-status.confirmed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.card-group-item-status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.card-group-item-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.card-group-item-currency {
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  margin-left: 2px;
+}
+
+/* Duplicate badge */
+.card-group-item.duplicate {
+  background: #fffbf0;
+  border-color: #ffc107;
+}
+
+.card-group-item .duplicate-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #ffc107;
+  color: #856404;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+/* New badge */
+.card-group-item.new-item {
+  background: #f0fff4;
+  border-color: #86efac;
+}
+
+.card-group-item .new-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #86efac;
+  color: #166534;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Card Batch Section (一括操作)
+   ══════════════════════════════════════════════════════════ */
+
+.card-batch-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f0f4ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+}
+
+.card-batch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.card-batch-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4338ca;
+  margin: 0;
+}
+
+.card-batch-count {
+  font-size: 12px;
+  color: #6366f1;
+  font-weight: 500;
+}
+
+/* Batch Summary */
+.card-batch-summary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-batch-summary-item {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.card-batch-summary-item.new {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+.card-batch-summary-item.duplicate {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+}
+
+.card-batch-summary-label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.card-batch-summary-count {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.card-batch-summary-item.new .card-batch-summary-count {
+  color: #155724;
+}
+
+.card-batch-summary-item.duplicate .card-batch-summary-count {
+  color: #856404;
+}
+
+/* Batch Result */
+.card-batch-result {
+  margin-bottom: 12px;
+}
+
+/* Batch Actions */
+.card-batch-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.card-batch-actions .btn {
+  padding: 8px 14px;
+  font-size: 12px;
 }

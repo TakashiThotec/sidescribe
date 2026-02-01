@@ -1,6 +1,10 @@
 import './sidepanel.css';
-import { PageInfo, PageMemo } from '../types';
+import { PageInfo, PageMemo, TabType, GabaLesson, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock } from '../types';
 import { getSettings, isConfigured } from '../utils/storage';
+
+// ── Gaba Constants ──
+const CALENDAR_EVENT_PRE_OFFSET_MINUTES = 20;
+const CALENDAR_EVENT_POST_OFFSET_MINUTES = 70;
 
 // ── DOM Elements ──
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -17,6 +21,24 @@ const siteActions = $<HTMLElement>('site-actions');
 const siteActionsContent = $<HTMLDivElement>('site-actions-content');
 const toast = $<HTMLDivElement>('toast');
 
+// Tab elements
+const tabBar = $<HTMLDivElement>('tab-bar');
+const tabButtons = document.querySelectorAll<HTMLButtonElement>('.tab');
+const tabContents = document.querySelectorAll<HTMLDivElement>('.tab-content');
+
+// ── Tab Configuration ──
+interface TabConfig {
+  tab: TabType;
+  hostnames: string[];
+}
+
+const TAB_CONFIGS: TabConfig[] = [
+  { tab: 'gaba', hostnames: ['my.gaba.jp'] },
+  { tab: 'suica', hostnames: ['www.mobilesuica.com', 'www.jreast.co.jp'] },
+  { tab: 'sbi', hostnames: ['www.netbk.co.jp'] },
+  { tab: 'card', hostnames: ['global.americanexpress.com', 'www.smbc-card.com'] },
+];
+
 // ── Site-specific action definitions ──
 interface SiteAction {
   hostname: string[];
@@ -26,33 +48,230 @@ interface SiteAction {
 }
 
 const SITE_ACTIONS: SiteAction[] = [
-  {
-    hostname: ['www.netbk.co.jp'],
-    label: '💰 入出金履歴を取得',
-    description: '住信SBIネット銀行の明細をNotionに保存',
-    messageAction: 'EXTRACT_BANK_DATA',
-  },
   // カード会社は今後追加
 ];
+
+// ── Gaba DOM Elements ──
+const gabaSubtabs = document.querySelectorAll<HTMLButtonElement>('.gaba-subtab');
+const gabaSubtabContents = document.querySelectorAll<HTMLDivElement>('.gaba-subtab-content');
+const gabaReservationsList = $<HTMLDivElement>('gaba-reservations-list');
+const gabaCompletedList = $<HTMLDivElement>('gaba-completed-list');
+const gabaReloadReservations = $<HTMLButtonElement>('gaba-reload-reservations');
+const gabaReloadCompleted = $<HTMLButtonElement>('gaba-reload-completed');
+const gabaSortOrder = $<HTMLInputElement>('gaba-sort-order');
+
+// ── Suica DOM Elements ──
+const suicaStatus = $<HTMLDivElement>('suica-status');
+const suicaStartDate = $<HTMLInputElement>('suica-start-date');
+const suicaEndDate = $<HTMLInputElement>('suica-end-date');
+const suicaReload = $<HTMLButtonElement>('suica-reload');
+const suicaOutputFormat = $<HTMLSelectElement>('suica-output-format');
+const suicaDateFormat = $<HTMLSelectElement>('suica-date-format');
+const suicaEncoding = $<HTMLSelectElement>('suica-encoding');
+const suicaCount = $<HTMLSpanElement>('suica-count');
+const suicaExportCsv = $<HTMLButtonElement>('suica-export-csv');
+const suicaPreviewArea = $<HTMLDivElement>('suica-preview-area');
+
+// ── SBI DOM Elements ──
+const sbiFetchPage = $<HTMLButtonElement>('sbi-fetch-page');
+const sbiPageStatus = $<HTMLDivElement>('sbi-page-status');
+const sbiPeriod = $<HTMLDivElement>('sbi-period');
+const sbiFetchNotion = $<HTMLButtonElement>('sbi-fetch-notion');
+const sbiNotionStatus = $<HTMLDivElement>('sbi-notion-status');
+const sbiResultStep = $<HTMLDivElement>('sbi-result-step');
+const sbiNewCount = $<HTMLSpanElement>('sbi-new-count');
+const sbiExistingCount = $<HTMLSpanElement>('sbi-existing-count');
+const sbiSelectAll = $<HTMLInputElement>('sbi-select-all');
+const sbiNewList = $<HTMLDivElement>('sbi-new-list');
+const sbiAddToNotion = $<HTMLButtonElement>('sbi-add-to-notion');
+const sbiPreview = $<HTMLDivElement>('sbi-preview');
+
+// ── Card DOM Elements ──
+const cardFetchCurrent = $<HTMLButtonElement>('card-fetch-current');
+const cardClearAll = $<HTMLButtonElement>('card-clear-all');
+const cardCompanyInfo = $<HTMLDivElement>('card-company-info');
+const cardGroupsContainer = $<HTMLDivElement>('card-groups-container');
+const cardStatus = $<HTMLDivElement>('card-status');
+const cardBatchSection = $<HTMLDivElement>('card-batch-section');
+const cardBatchCount = $<HTMLSpanElement>('card-batch-count');
+const cardBatchResult = $<HTMLDivElement>('card-batch-result');
+const cardBatchNewCount = $<HTMLSpanElement>('card-batch-new-count');
+const cardBatchDuplicateCount = $<HTMLSpanElement>('card-batch-duplicate-count');
+const cardBatchCheck = $<HTMLButtonElement>('card-batch-check');
+const cardBatchAdd = $<HTMLButtonElement>('card-batch-add');
+
+// ── Current State ──
+let currentHostname = '';
+let gabaReservations: GabaLesson[] = [];
+let gabaCompletedLessons: GabaLesson[] = [];
+let suicaTransactions: SuicaTransaction[] = [];
+let suicaFilteredTransactions: SuicaTransaction[] = [];
+let suicaSettings = {
+  dateFormat: 'yyyy-mm-dd',
+  encoding: 'utf-8',
+  outputFormat: 'raw',
+};
+
+// ── SBI State ──
+let sbiPageTransactions: BankTransaction[] = [];
+let sbiNotionTransactions: BankTransaction[] = [];
+let sbiNewTransactions: BankTransaction[] = [];
+let sbiExistingTransactions: BankTransaction[] = [];
+let sbiPeriodInfo = '';
+let sbiSelectedTransactions: Set<number> = new Set();
+
+// ── Card State ──
+let cardBillingGroups: CardBillingGroup[] = [];
+// 選択状態: Map<groupId, Set<billingIndex>>
+let cardSelectedBillings: Map<string, Set<number>> = new Map();
+// 重複チェック結果
+let cardDuplicateResults: Map<string, { billing: CardBilling; isDuplicate: boolean }[]> = new Map();
+let cardHasCheckedDuplicates = false;
+
+// ── Content Script Injection ──
+async function ensureContentScript(tabId: number): Promise<void> {
+  try {
+    // まずpingを送ってコンテンツスクリプトが存在するかチェック
+    await chrome.tabs.sendMessage(tabId, { action: 'PING' });
+  } catch {
+    // コンテンツスクリプトがない場合、動的にインジェクト
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js'],
+    });
+  }
+}
+
+async function sendMessageToTab<T>(tabId: number, message: any): Promise<T> {
+  await ensureContentScript(tabId);
+  return chrome.tabs.sendMessage(tabId, message);
+}
+
+// ── Tab Functions ──
+function getTabForHostname(hostname: string): TabType | null {
+  for (const config of TAB_CONFIGS) {
+    if (config.hostnames.some((h) => hostname.includes(h))) {
+      return config.tab;
+    }
+  }
+  return null;
+}
+
+function showTab(tabName: TabType) {
+  // Update tab buttons
+  tabButtons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  // Update tab contents
+  tabContents.forEach((content) => {
+    content.classList.toggle('active', content.id === `tab-${tabName}`);
+  });
+}
+
+function updateTabVisibility(hostname: string) {
+  const activeTab = getTabForHostname(hostname);
+
+  // Show/hide tab buttons based on current site
+  tabButtons.forEach((btn) => {
+    const tabName = btn.dataset.tab as TabType;
+    if (tabName === 'memo') {
+      // メモタブは常に表示
+      btn.style.display = '';
+    } else if (tabName === activeTab) {
+      // 該当サイトのタブを表示
+      btn.style.display = '';
+    } else {
+      // その他のタブは非表示
+      btn.style.display = 'none';
+    }
+  });
+
+  // 該当サイトならそのタブを選択、そうでなければメモタブ
+  showTab(activeTab || 'memo');
+}
+
+// ── Tab Click Handler ──
+tabButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tabName = btn.dataset.tab as TabType;
+    showTab(tabName);
+  });
+});
+
+// ── Gaba Subtab Click Handler ──
+gabaSubtabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const subtab = btn.dataset.gabaTab;
+    showGabaSubtab(subtab || 'reservations');
+  });
+});
+
+function showGabaSubtab(subtab: string) {
+  gabaSubtabs.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.gabaTab === subtab);
+  });
+  gabaSubtabContents.forEach((content) => {
+    content.classList.toggle('active', content.id === `gaba-${subtab}`);
+  });
+}
 
 // ── Init ──
 async function init() {
   const settings = await getSettings();
 
-  // 設定チェック
-  if (!isConfigured(settings)) {
-    notConfigured.style.display = 'block';
-  }
-
   // ページ情報を取得
   try {
     const pageInfo: PageInfo = await chrome.runtime.sendMessage({ action: 'GET_PAGE_INFO' });
+    currentHostname = pageInfo.hostname;
     pageHostname.textContent = pageInfo.hostname;
     memoTitle.value = pageInfo.title;
     memoUrl.value = pageInfo.url;
 
-    // サイト固有アクションの表示
+    // タブの表示/選択を更新
+    updateTabVisibility(pageInfo.hostname);
+
+    // サイト固有アクションの表示（タブがないサイト用）
     showSiteActions(pageInfo.hostname);
+
+    // 設定チェック（Suicaタブは不要なので除外）
+    const isSuicaSite = pageInfo.hostname.includes('jreast.co.jp') || pageInfo.hostname.includes('mobilesuica.com');
+    const isSbiSite = pageInfo.hostname.includes('netbk.co.jp');
+    const isCardSite = pageInfo.hostname.includes('americanexpress.com') || pageInfo.hostname.includes('smbc-card.com');
+    
+    if (isSuicaSite || isSbiSite) {
+      notConfigured.style.display = 'none';
+    } else if (!settings.notionApiKey) {
+      notConfigured.innerHTML = 'Notion APIキーが未設定です。<a href="#" id="link-settings">設定画面を開く</a>';
+      notConfigured.style.display = 'block';
+      attachSettingsLink();
+    } else if (!settings.memoDatabaseId) {
+      notConfigured.innerHTML = 'メモ用のDatabase IDが未設定です。<a href="#" id="link-settings">設定画面を開く</a>';
+      notConfigured.style.display = 'block';
+      attachSettingsLink();
+    } else {
+      notConfigured.style.display = 'none';
+    }
+
+    // Gabaタブの初期化
+    if (pageInfo.hostname.includes('my.gaba.jp')) {
+      initGabaTab();
+    }
+
+    // Suicaタブの初期化
+    if (isSuicaSite) {
+      initSuicaTab();
+    }
+
+    // SBIタブの初期化
+    if (isSbiSite) {
+      initSbiTab();
+    }
+
+    // カードタブの初期化（カードサイトのみ）
+    if (isCardSite) {
+      await initCardTab();
+    }
   } catch (err) {
     pageHostname.textContent = 'ページ情報を取得できません';
   }
@@ -84,7 +303,7 @@ async function handleSiteAction(action: SiteAction) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('No active tab');
 
-    const result = await chrome.tabs.sendMessage(tab.id, { action: action.messageAction });
+    const result = await sendMessageToTab<{ error?: string }>(tab.id, { action: action.messageAction });
     if (result?.error) throw new Error(result.error);
 
     showToast('完了しました ✓', 'success');
@@ -111,7 +330,10 @@ btnSaveMemo.addEventListener('click', async () => {
   };
 
   try {
-    await chrome.runtime.sendMessage({ action: 'SAVE_MEMO', payload: memo });
+    const result = await chrome.runtime.sendMessage({ action: 'SAVE_MEMO', payload: memo });
+    if (result?.error) {
+      throw new Error(result.error);
+    }
     showToast('メモを保存しました ✓', 'success');
     memoNote.value = '';
   } catch (err: any) {
@@ -131,6 +353,14 @@ linkSettings?.addEventListener('click', (e) => {
   chrome.runtime.sendMessage({ action: 'OPEN_OPTIONS' });
 });
 
+function attachSettingsLink() {
+  const link = document.getElementById('link-settings');
+  link?.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.runtime.sendMessage({ action: 'OPEN_OPTIONS' });
+  });
+}
+
 // ── Toast ──
 function showToast(message: string, type: 'success' | 'error') {
   toast.textContent = message;
@@ -143,6 +373,1443 @@ function showToast(message: string, type: 'success' | 'error') {
 
 // ── Tab切替時にページ情報を更新 ──
 chrome.tabs.onActivated.addListener(() => init());
+
+// ── ページ遷移時にページ情報を更新 ──
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // アクティブなタブでURLが変わってロードが完了したとき
+  if (changeInfo.status === 'complete' && tab.active) {
+    init();
+  }
+});
+
+// ── 設定変更時にUIを更新 ──
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync') {
+    init();
+  }
+});
+
+// ══════════════════════════════════════════════════════════
+// Gaba Functions
+// ══════════════════════════════════════════════════════════
+
+// ── Gaba Event Listeners ──
+gabaReloadReservations?.addEventListener('click', () => loadGabaReservations());
+gabaReloadCompleted?.addEventListener('click', () => loadGabaCompletedLessons());
+gabaSortOrder?.addEventListener('change', () => displayGabaReservations());
+
+// ── Load Gaba Reservations ──
+async function loadGabaReservations() {
+  if (!currentHostname.includes('my.gaba.jp')) return;
+
+  gabaReservationsList.innerHTML = '<div class="gaba-loading">予約を読み込み中...</div>';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const result = await sendMessageToTab<{ success: boolean; data: GabaLesson[]; error?: string }>(tab.id, { action: 'GET_GABA_RESERVATIONS' });
+    if (!result?.success) throw new Error(result?.error || 'Failed to get reservations');
+
+    gabaReservations = result.data;
+    displayGabaReservations();
+  } catch (err: any) {
+    gabaReservationsList.innerHTML = `<div class="gaba-error">${err.message}</div>`;
+  }
+}
+
+// ── Load Gaba Completed Lessons ──
+async function loadGabaCompletedLessons() {
+  if (!currentHostname.includes('my.gaba.jp')) return;
+
+  gabaCompletedList.innerHTML = '<div class="gaba-loading">終了済みレッスンを読み込み中...</div>';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const result = await sendMessageToTab<{ success: boolean; data: GabaLesson[]; error?: string }>(tab.id, { action: 'GET_GABA_COMPLETED' });
+    if (!result?.success) throw new Error(result?.error || 'Failed to get completed lessons');
+
+    gabaCompletedLessons = result.data;
+    displayGabaCompletedLessons();
+  } catch (err: any) {
+    gabaCompletedList.innerHTML = `<div class="gaba-error">${err.message}</div>`;
+  }
+}
+
+// ── Display Gaba Reservations ──
+function displayGabaReservations() {
+  if (gabaReservations.length === 0) {
+    gabaReservationsList.innerHTML = `
+      <div class="gaba-empty">
+        <p>予約がありません</p>
+        <a href="https://my.gaba.jp/schedule" target="_blank" class="gaba-link-btn">スケジュールを確認</a>
+      </div>
+    `;
+    return;
+  }
+
+  const sortAsc = gabaSortOrder?.checked ?? true;
+  const sorted = [...gabaReservations].sort((a, b) => {
+    const dateA = parseGabaDate(a.date, a.time);
+    const dateB = parseGabaDate(b.date, b.time);
+    return sortAsc ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+  });
+
+  gabaReservationsList.innerHTML = sorted.map((lesson) => renderGabaItem(lesson)).join('');
+  attachGabaNotionListeners(gabaReservationsList, sorted);
+}
+
+// ── Display Gaba Completed Lessons ──
+function displayGabaCompletedLessons() {
+  if (gabaCompletedLessons.length === 0) {
+    gabaCompletedList.innerHTML = '<div class="gaba-empty">終了済みレッスンがありません</div>';
+    return;
+  }
+
+  gabaCompletedList.innerHTML = gabaCompletedLessons.map((lesson) => renderGabaItem(lesson)).join('');
+  attachGabaNotionListeners(gabaCompletedList, gabaCompletedLessons);
+}
+
+// ── Render Gaba Item ──
+function renderGabaItem(lesson: GabaLesson): string {
+  const calendarLink = generateGoogleCalendarLink(lesson);
+  
+  // 日付に曜日が含まれているかチェック（例: "2026/02/04 (水)"）
+  const hasDay = /\([日月火水木金土]\)/.test(lesson.date);
+  const dayOfWeek = hasDay ? '' : `(${getGabaDayOfWeek(lesson.date)})`;
+  
+  // 日付表示を構築（曜日が重複しないように）
+  const dateDisplay = hasDay ? lesson.date : `${lesson.date} ${dayOfWeek}`;
+
+  return `
+    <div class="gaba-item" data-id="${lesson.id}">
+      <div class="gaba-item-content">
+        <div class="gaba-item-main">
+          <div class="gaba-item-info-row">
+            <span class="gaba-item-date">${dateDisplay}</span>
+            <span class="gaba-item-time">${lesson.time}</span>
+            ${lesson.ls ? `<span class="gaba-item-ls">${lesson.ls}</span>` : ''}
+          </div>
+        </div>
+        <div class="gaba-item-actions">
+          <a href="${calendarLink}" target="_blank" class="gaba-calendar-btn google" title="Google Calendar">📅</a>
+          <button class="gaba-calendar-btn notion" data-lesson-id="${lesson.id}" title="Notionに追加">🔗</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Attach Notion Button Listeners ──
+function attachGabaNotionListeners(container: HTMLElement, lessons: GabaLesson[]) {
+  const buttons = container.querySelectorAll<HTMLButtonElement>('.gaba-calendar-btn.notion');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const lessonId = btn.dataset.lessonId;
+      const lesson = lessons.find((l) => l.id === lessonId);
+      if (lesson) {
+        await addGabaLessonToNotion(lesson);
+      }
+    });
+  });
+}
+
+// ── Add Gaba Lesson to Notion ──
+async function addGabaLessonToNotion(lesson: GabaLesson) {
+  const settings = await getSettings();
+  if (!settings.notionApiKey || !settings.gabaDatabaseId) {
+    showToast('Notion設定が未完了です', 'error');
+    return;
+  }
+
+  showToast('Notionに追加中...', 'success');
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'SAVE_GABA_LESSONS',
+      payload: { lessons: [lesson] },
+    });
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+    showToast('Notionに追加しました ✓', 'success');
+  } catch (err: any) {
+    showToast(`エラー: ${err.message}`, 'error');
+  }
+}
+
+// ── Parse Gaba Date ──
+function parseGabaDate(dateText: string, timeText: string): Date {
+  const dateMatch = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  const timeMatch = timeText.match(/(\d{1,2}):(\d{2})/);
+
+  if (dateMatch && timeMatch) {
+    return new Date(
+      parseInt(dateMatch[1]),
+      parseInt(dateMatch[2]) - 1,
+      parseInt(dateMatch[3]),
+      parseInt(timeMatch[1]),
+      parseInt(timeMatch[2])
+    );
+  }
+  return new Date(0);
+}
+
+// ── Get Day of Week ──
+function getGabaDayOfWeek(dateText: string): string {
+  const dateMatch = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (!dateMatch) return '';
+
+  const date = new Date(
+    parseInt(dateMatch[1]),
+    parseInt(dateMatch[2]) - 1,
+    parseInt(dateMatch[3])
+  );
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return days[date.getDay()];
+}
+
+// ── Generate Google Calendar Link ──
+function generateGoogleCalendarLink(lesson: GabaLesson): string {
+  const dateMatch = lesson.date.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  const timeMatch = lesson.time.match(/(\d{1,2}):(\d{2})/);
+  if (!dateMatch || !timeMatch) return '#';
+
+  const originalDate = new Date(
+    parseInt(dateMatch[1]),
+    parseInt(dateMatch[2]) - 1,
+    parseInt(dateMatch[3]),
+    parseInt(timeMatch[1]),
+    parseInt(timeMatch[2])
+  );
+
+  const startDate = new Date(originalDate.getTime() - CALENDAR_EVENT_PRE_OFFSET_MINUTES * 60 * 1000);
+  const endDate = new Date(originalDate.getTime() + CALENDAR_EVENT_POST_OFFSET_MINUTES * 60 * 1000);
+
+  const formatDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const title = encodeURIComponent(`【Gaba】レッスン（${lesson.time}）`);
+  const location = lesson.ls ? encodeURIComponent(lesson.ls) : '';
+
+  let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatDate(startDate)}/${formatDate(endDate)}`;
+  if (location) url += `&location=${location}`;
+
+  return url;
+}
+
+// ── Initialize Gaba Tab when switching to it ──
+function initGabaTab() {
+  if (currentHostname.includes('my.gaba.jp')) {
+    loadGabaReservations();
+    loadGabaCompletedLessons();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// Suica Functions (suica-history-to-freee style)
+// ══════════════════════════════════════════════════════════
+
+// ── Suica Event Listeners ──
+suicaReload?.addEventListener('click', () => loadSuicaData());
+suicaExportCsv?.addEventListener('click', () => exportSuicaCsv());
+suicaStartDate?.addEventListener('change', () => onSuicaPeriodChange());
+suicaEndDate?.addEventListener('change', () => onSuicaPeriodChange());
+suicaOutputFormat?.addEventListener('change', () => onSuicaSettingChange('outputFormat'));
+suicaDateFormat?.addEventListener('change', () => onSuicaSettingChange('dateFormat'));
+suicaEncoding?.addEventListener('change', () => onSuicaSettingChange('encoding'));
+
+// ── Initialize Suica Tab ──
+function initSuicaTab() {
+  setDefaultSuicaPeriod();
+  loadSuicaData();
+}
+
+// ── Set Default Period (前月1日〜月末) ──
+function setDefaultSuicaPeriod() {
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+
+  // 前月の1日から月末まで
+  const startDate = new Date(currentYear, currentMonth - 1, 1);
+  const endDate = new Date(currentYear, currentMonth, 0); // 前月の最終日
+
+  if (suicaStartDate) suicaStartDate.value = formatDateForInput(startDate);
+  if (suicaEndDate) suicaEndDate.value = formatDateForInput(endDate);
+}
+
+// ── Format Date for Input ──
+function formatDateForInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// ── Show Suica Status ──
+function showSuicaStatus(message: string, type: 'success' | 'error' | 'warning' | 'info') {
+  if (!suicaStatus) return;
+  suicaStatus.textContent = message;
+  suicaStatus.className = `suica-status-inline ${type}`;
+}
+
+// ── Load Suica Data ──
+async function loadSuicaData() {
+  if (!currentHostname.includes('jreast.co.jp') && !currentHostname.includes('mobilesuica.com')) {
+    showSuicaStatus('モバイルSuicaの利用履歴ページでデータを取得できます', 'info');
+    if (suicaPreviewArea) {
+      suicaPreviewArea.innerHTML = '<div class="suica-no-data">モバイルSuicaの利用履歴ページに移動してから「データ更新」ボタンを押してください。</div>';
+    }
+    return;
+  }
+
+  showSuicaStatus('データを取得中...', 'info');
+  if (suicaPreviewArea) {
+    suicaPreviewArea.innerHTML = '<div class="suica-no-data">データを取得中...</div>';
+  }
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const result = await sendMessageToTab<{ success: boolean; data: SuicaTransaction[]; error?: string }>(tab.id, { action: 'GET_SUICA_DATA' });
+    if (!result?.success) throw new Error(result?.error || 'Failed to get Suica data');
+
+    suicaTransactions = result.data;
+    
+    if (suicaTransactions.length === 0) {
+      showSuicaStatus('データが見つかりませんでした。モバイルSuicaの利用履歴ページにアクセスしていることを確認してください。', 'warning');
+    } else {
+      processAndFilterSuicaData();
+      displaySuicaPreview();
+    }
+  } catch (err: any) {
+    showSuicaStatus(`データ取得中にエラーが発生しました: ${err.message}`, 'error');
+    if (suicaPreviewArea) {
+      suicaPreviewArea.innerHTML = `<div class="suica-no-data" style="color: #721c24;">${err.message}</div>`;
+    }
+  }
+}
+
+// ── Process and Filter Suica Data ──
+function processAndFilterSuicaData() {
+  const startDateValue = suicaStartDate?.value;
+  const endDateValue = suicaEndDate?.value;
+  
+  if (!startDateValue || !endDateValue) {
+    suicaFilteredTransactions = suicaTransactions;
+    return;
+  }
+
+  const startDate = new Date(startDateValue);
+  const endDate = new Date(endDateValue);
+
+  // 期間に基づいてデータをフィルタリング
+  suicaFilteredTransactions = suicaTransactions.filter((tx) => {
+    const recordDate = new Date(tx.date);
+    
+    // 期間チェック
+    if (recordDate < startDate || recordDate > endDate) {
+      return false;
+    }
+    
+    // 金額チェック（0円の取引は除外）
+    if (tx.amount === 0) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  // ボタンの状態を更新
+  const hasData = suicaFilteredTransactions.length > 0;
+  if (suicaExportCsv) suicaExportCsv.disabled = !hasData;
+  if (suicaCount) suicaCount.textContent = `${suicaFilteredTransactions.length}件`;
+
+  if (hasData) {
+    showSuicaStatus(`${suicaFilteredTransactions.length}件のデータを取得しました（全${suicaTransactions.length}件中）`, 'success');
+  } else {
+    showSuicaStatus('指定した条件に一致するデータがありません', 'warning');
+  }
+}
+
+// ── Display Suica Preview (Table format) ──
+function displaySuicaPreview() {
+  if (!suicaPreviewArea) return;
+
+  if (suicaFilteredTransactions.length === 0) {
+    suicaPreviewArea.innerHTML = '<div class="suica-no-data">条件に一致するデータがありません</div>';
+    return;
+  }
+
+  // プレビュー用のテーブルを作成
+  let tableHtml = `
+    <table class="suica-preview-table">
+      <thead>
+        <tr>
+          <th>取引日</th>
+          <th>取引金額</th>
+          <th>取引内容</th>
+          <th>残高</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  // 最大10件表示
+  const displayData = suicaFilteredTransactions.slice(0, 10);
+  displayData.forEach((tx) => {
+    const amountClass = tx.amount < 0 ? 'amount-negative' : 'amount-positive';
+    const balanceNum = tx.balance ? parseInt(tx.balance, 10) : null;
+    const balanceStr = balanceNum !== null && !isNaN(balanceNum) ? `${balanceNum.toLocaleString()}円` : '-';
+    tableHtml += `
+      <tr>
+        <td>${tx.date}</td>
+        <td class="${amountClass}">${tx.amount.toLocaleString()}円</td>
+        <td>${tx.details}</td>
+        <td>${balanceStr}</td>
+      </tr>
+    `;
+  });
+
+  if (suicaFilteredTransactions.length > 10) {
+    tableHtml += `<tr><td colspan="4" style="text-align: center; font-style: italic; color: #6c757d;">...他 ${suicaFilteredTransactions.length - 10} 件</td></tr>`;
+  }
+
+  tableHtml += '</tbody></table>';
+  suicaPreviewArea.innerHTML = tableHtml;
+}
+
+// ── On Suica Period Change ──
+function onSuicaPeriodChange() {
+  if (suicaTransactions.length > 0) {
+    processAndFilterSuicaData();
+    displaySuicaPreview();
+  }
+}
+
+// ── On Suica Setting Change ──
+function onSuicaSettingChange(settingId: string) {
+  let element: HTMLSelectElement | null = null;
+  
+  if (settingId === 'outputFormat') element = suicaOutputFormat;
+  else if (settingId === 'dateFormat') element = suicaDateFormat;
+  else if (settingId === 'encoding') element = suicaEncoding;
+  
+  if (!element) return;
+  
+  (suicaSettings as any)[settingId] = element.value;
+
+  // データの再フィルタリング
+  if (suicaTransactions.length > 0) {
+    processAndFilterSuicaData();
+    displaySuicaPreview();
+  }
+}
+
+// ── Format Suica Date ──
+function formatSuicaDate(dateString: string): string {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  switch (suicaSettings.dateFormat) {
+    case 'yyyy/mm/dd':
+      return `${year}/${month}/${day}`;
+    case 'dd/mm/yyyy':
+      return `${day}/${month}/${year}`;
+    case 'yyyy-mm-dd':
+    default:
+      return `${year}-${month}-${day}`;
+  }
+}
+
+// ── Get Format Display Name ──
+function getFormatDisplayName(): string {
+  switch (suicaSettings.outputFormat) {
+    case 'raw': return '編集なし';
+    case 'freee': return 'freee用';
+    case 'moneyforward': return 'MoneyForward用';
+    default: return '';
+  }
+}
+
+// ── Generate CSV by Format ──
+function generateCsvByFormat(): string {
+  switch (suicaSettings.outputFormat) {
+    case 'raw': return generateRawCsvData();
+    case 'freee': return generateFreeeCsvData();
+    case 'moneyforward': return generateRawCsvData(); // 今後実装
+    default: return generateRawCsvData();
+  }
+}
+
+// ── Generate Raw CSV Data ──
+function generateRawCsvData(): string {
+  const delimiter = ',';
+  const csvHeader = ['取引日', '取引金額', '取引内容', '残高'];
+  const csvRows = [csvHeader.join(delimiter)];
+
+  suicaFilteredTransactions.forEach((tx) => {
+    csvRows.push([
+      tx.date,
+      tx.amount,
+      tx.details,
+      tx.balance || ''
+    ].map((v) => `"${v}"`).join(delimiter));
+  });
+
+  return csvRows.join('\r\n');
+}
+
+// ── Generate freee CSV Data ──
+function generateFreeeCsvData(): string {
+  const delimiter = ',';
+  const csvHeader = ['取引日', '取引金額', '取引内容'];
+  const csvRows = [csvHeader.join(delimiter)];
+
+  suicaFilteredTransactions.forEach((tx) => {
+    const row = [
+      formatSuicaDate(tx.date),
+      tx.amount,
+      tx.details
+    ];
+
+    const escapedRow = row.map((cell) => {
+      const cellStr = String(cell);
+      if (cellStr.includes(delimiter) || cellStr.includes('"') || cellStr.includes('\n')) {
+        return `"${cellStr.replace(/"/g, '""')}"`;
+      }
+      return cellStr;
+    });
+
+    csvRows.push(escapedRow.join(delimiter));
+  });
+
+  return csvRows.join('\n');
+}
+
+// ── Export Suica CSV ──
+function exportSuicaCsv() {
+  if (suicaFilteredTransactions.length === 0) {
+    showSuicaStatus('エクスポートするデータがありません', 'error');
+    return;
+  }
+
+  try {
+    const formatName = getFormatDisplayName();
+    showSuicaStatus(`${formatName}CSVファイルを生成中...`, 'info');
+
+    const csvData = generateCsvByFormat();
+
+    const blob = new Blob([csvData], {
+      type: suicaSettings.encoding === 'shift-jis' ? 'text/csv;charset=shift-jis' : 'text/csv;charset=utf-8'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `suica_history_${suicaSettings.outputFormat}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showSuicaStatus(`${formatName}CSVファイルをダウンロードしました（${suicaFilteredTransactions.length}件）`, 'success');
+  } catch (err: any) {
+    showSuicaStatus(`CSVエクスポート中にエラーが発生しました: ${err.message}`, 'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// SBI Bank Functions
+// ══════════════════════════════════════════════════════════
+
+// ── SBI Event Listeners ──
+sbiFetchPage?.addEventListener('click', () => loadSbiBankData());
+sbiFetchNotion?.addEventListener('click', () => loadNotionBankDataAndMatch());
+sbiSelectAll?.addEventListener('change', () => toggleSelectAllSbi());
+sbiAddToNotion?.addEventListener('click', () => addSelectedSbiToNotion());
+
+// ── Initialize SBI Tab ──
+function initSbiTab() {
+  // Reset state
+  sbiPageTransactions = [];
+  sbiNotionTransactions = [];
+  sbiNewTransactions = [];
+  sbiExistingTransactions = [];
+  sbiPeriodInfo = '';
+  sbiSelectedTransactions.clear();
+
+  // Reset UI
+  if (sbiPageStatus) sbiPageStatus.textContent = '';
+  if (sbiPeriod) {
+    sbiPeriod.textContent = '';
+    sbiPeriod.classList.remove('show');
+  }
+  if (sbiFetchNotion) sbiFetchNotion.disabled = true;
+  if (sbiNotionStatus) sbiNotionStatus.textContent = '';
+  if (sbiResultStep) sbiResultStep.style.display = 'none';
+  if (sbiPreview) sbiPreview.textContent = '';
+}
+
+// ── Load SBI Bank Data from Page ──
+async function loadSbiBankData() {
+  if (!sbiFetchPage) return;
+
+  sbiFetchPage.disabled = true;
+  showSbiStatus(sbiPageStatus, '取得中...', 'loading');
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const result = await sendMessageToTab<{
+      success: boolean;
+      data: BankTransaction[];
+      period?: string;
+      error?: string;
+    }>(tab.id, { action: 'EXTRACT_BANK_DATA' });
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Failed to extract bank data');
+    }
+
+    sbiPageTransactions = result.data;
+    sbiPeriodInfo = result.period || '';
+
+    // Update UI
+    showSbiStatus(sbiPageStatus, `${sbiPageTransactions.length}件の明細を取得しました`, 'success');
+
+    if (sbiPeriod && sbiPeriodInfo) {
+      sbiPeriod.textContent = `📅 期間: ${sbiPeriodInfo}`;
+      sbiPeriod.classList.add('show');
+    }
+
+    // Enable Notion fetch button
+    if (sbiFetchNotion) sbiFetchNotion.disabled = false;
+
+    // Show preview
+    if (sbiPreview) {
+      sbiPreview.textContent = JSON.stringify(sbiPageTransactions.slice(0, 5), null, 2);
+    }
+
+    // Reset result step
+    if (sbiResultStep) sbiResultStep.style.display = 'none';
+  } catch (err: any) {
+    showSbiStatus(sbiPageStatus, `エラー: ${err.message}`, 'error');
+    if (sbiFetchNotion) sbiFetchNotion.disabled = true;
+  } finally {
+    sbiFetchPage.disabled = false;
+  }
+}
+
+// ── Load Notion Bank Data and Match ──
+async function loadNotionBankDataAndMatch() {
+  if (!sbiFetchNotion || sbiPageTransactions.length === 0) return;
+
+  sbiFetchNotion.disabled = true;
+  showSbiStatus(sbiNotionStatus, 'Notionからデータを取得中...', 'loading');
+
+  try {
+    // Parse period from sbiPeriodInfo (e.g., "2026年1月")
+    const periodMatch = sbiPeriodInfo.match(/(\d{4})年(\d{1,2})月/);
+    if (!periodMatch) {
+      throw new Error('期間情報を解析できませんでした');
+    }
+
+    const year = parseInt(periodMatch[1]);
+    const month = parseInt(periodMatch[2]);
+
+    // Calculate start and end dates for the month
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`;
+
+    // Fetch from Notion
+    const result = await chrome.runtime.sendMessage({
+      action: 'GET_NOTION_BANK_DATA',
+      payload: { startDate, endDate },
+    });
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    sbiNotionTransactions = result.data || [];
+    showSbiStatus(sbiNotionStatus, `Notionから${sbiNotionTransactions.length}件取得しました。照合中...`, 'success');
+
+    // Match transactions
+    matchBankTransactions();
+
+    // Display results
+    displaySbiMatchResults();
+  } catch (err: any) {
+    showSbiStatus(sbiNotionStatus, `エラー: ${err.message}`, 'error');
+  } finally {
+    sbiFetchNotion.disabled = false;
+  }
+}
+
+// ── Match Bank Transactions ──
+function matchBankTransactions() {
+  sbiNewTransactions = [];
+  sbiExistingTransactions = [];
+
+  for (const pageTx of sbiPageTransactions) {
+    // Check if this transaction exists in Notion
+    // Match by date AND (withdrawal OR deposit amount)
+    const exists = sbiNotionTransactions.some((notionTx) => {
+      if (pageTx.date !== notionTx.date) return false;
+
+      // Match withdrawal
+      if (pageTx.withdrawal != null && notionTx.withdrawal != null) {
+        if (pageTx.withdrawal === notionTx.withdrawal) return true;
+      }
+
+      // Match deposit
+      if (pageTx.deposit != null && notionTx.deposit != null) {
+        if (pageTx.deposit === notionTx.deposit) return true;
+      }
+
+      return false;
+    });
+
+    if (exists) {
+      sbiExistingTransactions.push(pageTx);
+    } else {
+      sbiNewTransactions.push(pageTx);
+    }
+  }
+
+  // Initialize selected transactions (all new transactions selected by default)
+  sbiSelectedTransactions.clear();
+  sbiNewTransactions.forEach((_, index) => {
+    sbiSelectedTransactions.add(index);
+  });
+}
+
+// ── Display SBI Match Results ──
+function displaySbiMatchResults() {
+  if (!sbiResultStep || !sbiNewCount || !sbiExistingCount || !sbiNewList) return;
+
+  sbiResultStep.style.display = 'block';
+  sbiNewCount.textContent = String(sbiNewTransactions.length);
+  sbiExistingCount.textContent = String(sbiExistingTransactions.length);
+
+  if (sbiNewTransactions.length === 0) {
+    sbiNewList.innerHTML = '<div class="sbi-empty">新規の取引はありません</div>';
+    if (sbiAddToNotion) sbiAddToNotion.disabled = true;
+    if (sbiSelectAll) sbiSelectAll.checked = false;
+    return;
+  }
+
+  // Render new transactions list
+  sbiNewList.innerHTML = sbiNewTransactions.map((tx, index) => {
+    const isChecked = sbiSelectedTransactions.has(index);
+    const amountClass = tx.deposit ? 'deposit' : 'withdrawal';
+    const amountStr = tx.deposit
+      ? `+${tx.deposit.toLocaleString()}円`
+      : `-${tx.withdrawal?.toLocaleString()}円`;
+
+    return `
+      <div class="sbi-transaction-item">
+        <input type="checkbox" data-index="${index}" ${isChecked ? 'checked' : ''}>
+        <div class="sbi-transaction-info">
+          <div class="sbi-transaction-date">${tx.date}</div>
+          <div class="sbi-transaction-desc">${tx.description}</div>
+        </div>
+        <div class="sbi-transaction-amount ${amountClass}">${amountStr}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach checkbox listeners
+  const checkboxes = sbiNewList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+  checkboxes.forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const index = parseInt(cb.dataset.index || '0');
+      if (cb.checked) {
+        sbiSelectedTransactions.add(index);
+      } else {
+        sbiSelectedTransactions.delete(index);
+      }
+      updateSbiAddButton();
+    });
+  });
+
+  updateSbiAddButton();
+}
+
+// ── Toggle Select All ──
+function toggleSelectAllSbi() {
+  if (!sbiSelectAll || !sbiNewList) return;
+
+  const checkboxes = sbiNewList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+
+  if (sbiSelectAll.checked) {
+    // Select all
+    sbiSelectedTransactions.clear();
+    sbiNewTransactions.forEach((_, index) => {
+      sbiSelectedTransactions.add(index);
+    });
+    checkboxes.forEach((cb) => (cb.checked = true));
+  } else {
+    // Deselect all
+    sbiSelectedTransactions.clear();
+    checkboxes.forEach((cb) => (cb.checked = false));
+  }
+
+  updateSbiAddButton();
+}
+
+// ── Update SBI Add Button ──
+function updateSbiAddButton() {
+  if (!sbiAddToNotion) return;
+  const count = sbiSelectedTransactions.size;
+  sbiAddToNotion.disabled = count === 0;
+  sbiAddToNotion.textContent = `📤 選択した取引をNotionに追加 (${count}件)`;
+}
+
+// ── Add Selected SBI Transactions to Notion ──
+async function addSelectedSbiToNotion() {
+  if (!sbiAddToNotion || sbiSelectedTransactions.size === 0) return;
+
+  const transactionsToAdd = Array.from(sbiSelectedTransactions).map(
+    (index) => sbiNewTransactions[index]
+  );
+
+  sbiAddToNotion.disabled = true;
+  sbiAddToNotion.textContent = '📤 追加中...';
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'SAVE_BANK_TRANSACTIONS',
+      payload: { transactions: transactionsToAdd },
+    });
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    showToast(`${result.count}件の取引をNotionに追加しました ✓`, 'success');
+
+    // Update UI - remove added items from new list
+    sbiNewTransactions = sbiNewTransactions.filter(
+      (_, index) => !sbiSelectedTransactions.has(index)
+    );
+    sbiSelectedTransactions.clear();
+
+    // Re-display results
+    displaySbiMatchResults();
+  } catch (err: any) {
+    showToast(`エラー: ${err.message}`, 'error');
+    sbiAddToNotion.disabled = false;
+    updateSbiAddButton();
+  }
+}
+
+// ── Show SBI Status ──
+function showSbiStatus(element: HTMLElement | null, message: string, type: 'success' | 'error' | 'loading') {
+  if (!element) return;
+  element.textContent = message;
+  element.className = `sbi-status ${type}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// Card Tab Functions
+// ══════════════════════════════════════════════════════════
+
+// ── Card Event Listeners ──
+cardFetchCurrent?.addEventListener('click', () => fetchCurrentPageCardBilling());
+cardClearAll?.addEventListener('click', () => clearAllCardBillings());
+cardBatchCheck?.addEventListener('click', () => batchCheckCardDuplicates());
+cardBatchAdd?.addEventListener('click', () => batchAddCardBillingsToNotion());
+
+// ── Session Storage Key ──
+const CARD_STOCK_KEY = 'cardBillingStock';
+
+// ── Load Card Stock from Session Storage ──
+async function loadCardStock(): Promise<CardBillingStock | null> {
+  try {
+    const result = await chrome.storage.session.get(CARD_STOCK_KEY);
+    return result[CARD_STOCK_KEY] || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Save Card Stock to Session Storage ──
+async function saveCardStock(stock: CardBillingStock): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [CARD_STOCK_KEY]: stock });
+  } catch (err) {
+    console.error('Failed to save card stock:', err);
+  }
+}
+
+// ── Clear Card Stock from Session Storage ──
+async function clearCardStock(): Promise<void> {
+  try {
+    await chrome.storage.session.remove(CARD_STOCK_KEY);
+  } catch (err) {
+    console.error('Failed to clear card stock:', err);
+  }
+}
+
+// ── Generate Group ID ──
+function generateGroupId(cardCompany: string, cardName: string): string {
+  return `${cardCompany}-${cardName.replace(/\s+/g, '_')}`;
+}
+
+// ── Initialize Card Tab ──
+async function initCardTab() {
+  const cardCompany = getCardCompany();
+
+  // カード会社情報の表示を非表示に
+  if (cardCompanyInfo) {
+    cardCompanyInfo.style.display = 'none';
+  }
+
+  // セッションストレージからデータをロード
+  const stock = await loadCardStock();
+  if (stock && stock.groups.length > 0) {
+    cardBillingGroups = stock.groups;
+  }
+
+  // 選択状態を初期化
+  cardSelectedBillings.clear();
+  cardDuplicateResults.clear();
+  cardHasCheckedDuplicates = false;
+
+  // UI表示
+  displayCardGroups();
+  updateBatchSection();
+
+  // カードサイトの場合は自動でデータを取得
+  if (cardCompany) {
+    await fetchCurrentPageCardBilling();
+  }
+}
+
+// ── Get Card Company from Current Hostname ──
+function getCardCompany(): 'amex' | 'smbc' | null {
+  if (currentHostname.includes('americanexpress.com')) {
+    return 'amex';
+  }
+  if (currentHostname.includes('smbc-card.com')) {
+    return 'smbc';
+  }
+  return null;
+}
+
+// ── Fetch Current Page Card Billing ──
+async function fetchCurrentPageCardBilling() {
+  const cardCompany = getCardCompany();
+  if (!cardCompany) {
+    showCardStatus('このページはカード会社のページではありません', 'error');
+    return;
+  }
+
+  if (cardFetchCurrent) cardFetchCurrent.disabled = true;
+  showCardStatus('データを取得中...', 'info');
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+
+    const result = await sendMessageToTab<{ success: boolean; data: CardBilling[]; error?: string }>(tab.id, { action: 'GET_CARD_BILLING' });
+    if (!result?.success) throw new Error(result?.error || 'Failed to get card billing');
+
+    const newBillings = result.data;
+
+    if (newBillings.length === 0) {
+      showCardStatus('引き落とし情報が見つかりませんでした', 'info');
+      return;
+    }
+
+    // カードごとにグループ化
+    const groupMap = new Map<string, CardBilling[]>();
+    for (const billing of newBillings) {
+      const groupId = generateGroupId(billing.cardCompany, billing.cardName);
+      if (!groupMap.has(groupId)) {
+        groupMap.set(groupId, []);
+      }
+      groupMap.get(groupId)!.push(billing);
+    }
+
+    // 既存のグループを更新または新規追加
+    for (const [groupId, billings] of groupMap) {
+      const existingIndex = cardBillingGroups.findIndex(g => g.id === groupId);
+      const newGroup: CardBillingGroup = {
+        id: groupId,
+        cardCompany: billings[0].cardCompany,
+        cardName: billings[0].cardName,
+        billings: billings,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      if (existingIndex >= 0) {
+        // 既存グループを更新
+        cardBillingGroups[existingIndex] = newGroup;
+      } else {
+        // 新規グループを追加
+        cardBillingGroups.push(newGroup);
+      }
+    }
+
+    // セッションストレージに保存
+    await saveCardStock({
+      groups: cardBillingGroups,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    // 重複チェック結果をリセット
+    cardDuplicateResults.clear();
+    cardHasCheckedDuplicates = false;
+
+    // UI更新
+    displayCardGroups();
+    updateBatchSection();
+    showCardStatus(`${newBillings.length}件の引き落とし情報をストックしました`, 'success');
+  } catch (err: any) {
+    showCardStatus(`エラー: ${err.message}`, 'error');
+  } finally {
+    if (cardFetchCurrent) cardFetchCurrent.disabled = false;
+  }
+}
+
+// ── Clear All Card Billings ──
+async function clearAllCardBillings() {
+  cardBillingGroups = [];
+  cardSelectedBillings.clear();
+  cardDuplicateResults.clear();
+  cardHasCheckedDuplicates = false;
+
+  await clearCardStock();
+
+  displayCardGroups();
+  updateBatchSection();
+  showCardStatus('すべてのストックをクリアしました', 'info');
+}
+
+// ── Remove Card Group ──
+async function removeCardGroup(groupId: string) {
+  cardBillingGroups = cardBillingGroups.filter(g => g.id !== groupId);
+  cardSelectedBillings.delete(groupId);
+  cardDuplicateResults.delete(groupId);
+
+  await saveCardStock({
+    groups: cardBillingGroups,
+    lastUpdated: new Date().toISOString(),
+  });
+
+  displayCardGroups();
+  updateBatchSection();
+}
+
+// ── Display Card Groups ──
+function displayCardGroups() {
+  if (!cardGroupsContainer) return;
+
+  if (cardBillingGroups.length === 0) {
+    cardGroupsContainer.innerHTML = `
+      <div class="card-empty-stock">
+        <p>📭 ストックされたデータはありません</p>
+        <p class="card-empty-hint">カード会社のページを開くと自動でデータがストックされます</p>
+      </div>
+    `;
+    return;
+  }
+
+  cardGroupsContainer.innerHTML = cardBillingGroups.map((group) => {
+    const fetchedDate = new Date(group.fetchedAt).toLocaleString('ja-JP', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const selectedSet = cardSelectedBillings.get(group.id) || new Set();
+    const duplicateResults = cardDuplicateResults.get(group.id) || [];
+    const allSelected = group.billings.length > 0 && selectedSet.size === group.billings.length;
+
+    return `
+      <div class="card-group" data-group-id="${group.id}">
+        <div class="card-group-header">
+          <div class="card-group-info">
+            <input type="checkbox" class="card-group-checkbox" data-group-id="${group.id}" ${allSelected ? 'checked' : ''}>
+            <span class="card-group-name">${group.cardName}</span>
+          </div>
+          <div class="card-group-actions">
+            <span class="card-group-fetched">取得: ${fetchedDate}</span>
+            <button class="card-group-remove" data-group-id="${group.id}" title="削除">✕</button>
+          </div>
+        </div>
+        <div class="card-group-body">
+          <div class="card-group-items">
+            ${group.billings.map((billing, index) => {
+              const isSelected = selectedSet.has(index);
+              const dupResult = duplicateResults.find(r => 
+                r.billing.paymentDate === billing.paymentDate && 
+                r.billing.amount === billing.amount
+              );
+              const isDuplicate = dupResult?.isDuplicate ?? false;
+              const statusClass = billing.isConfirmed ? 'confirmed' : 'pending';
+              const statusText = billing.isConfirmed ? '確定' : '未確定';
+              const itemClass = isDuplicate ? 'duplicate' : (cardHasCheckedDuplicates ? 'new-item' : '');
+
+              return `
+                <div class="card-group-item ${itemClass}">
+                  <input type="checkbox" 
+                    data-group-id="${group.id}" 
+                    data-billing-index="${index}"
+                    ${isSelected ? 'checked' : ''}
+                    ${isDuplicate ? 'disabled' : ''}>
+                  <div class="card-group-item-content">
+                    <div class="card-group-item-info">
+                      <span class="card-group-item-date">
+                        ${billing.paymentDate} 引き落とし
+                        <span class="card-group-item-status ${statusClass}">${statusText}</span>
+                        ${isDuplicate ? '<span class="duplicate-badge">重複</span>' : ''}
+                        ${cardHasCheckedDuplicates && !isDuplicate ? '<span class="new-badge">新規</span>' : ''}
+                      </span>
+                    </div>
+                    <div class="card-group-item-amount">
+                      ${billing.amount.toLocaleString()}<span class="card-group-item-currency">円</span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // イベントリスナーをアタッチ
+  attachCardGroupListeners();
+}
+
+// ── Attach Card Group Listeners ──
+function attachCardGroupListeners() {
+  if (!cardGroupsContainer) return;
+
+  // グループ削除ボタン
+  const removeButtons = cardGroupsContainer.querySelectorAll<HTMLButtonElement>('.card-group-remove');
+  removeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const groupId = btn.dataset.groupId;
+      if (groupId) removeCardGroup(groupId);
+    });
+  });
+
+  // グループ全選択チェックボックス
+  const groupCheckboxes = cardGroupsContainer.querySelectorAll<HTMLInputElement>('.card-group-checkbox');
+  groupCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      const groupId = cb.dataset.groupId;
+      if (!groupId) return;
+
+      const group = cardBillingGroups.find(g => g.id === groupId);
+      if (!group) return;
+
+      const duplicateResults = cardDuplicateResults.get(groupId) || [];
+
+      if (cb.checked) {
+        // 重複でないものだけ選択
+        const selectedSet = new Set<number>();
+        group.billings.forEach((billing, index) => {
+          const isDuplicate = duplicateResults.some(r => 
+            r.billing.paymentDate === billing.paymentDate && 
+            r.billing.amount === billing.amount && 
+            r.isDuplicate
+          );
+          if (!isDuplicate) {
+            selectedSet.add(index);
+          }
+        });
+        cardSelectedBillings.set(groupId, selectedSet);
+      } else {
+        cardSelectedBillings.delete(groupId);
+      }
+
+      displayCardGroups();
+      updateBatchSection();
+    });
+  });
+
+  // 個別チェックボックス
+  const itemCheckboxes = cardGroupsContainer.querySelectorAll<HTMLInputElement>('.card-group-item input[type="checkbox"]');
+  itemCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      const groupId = cb.dataset.groupId;
+      const billingIndex = parseInt(cb.dataset.billingIndex || '0');
+      if (!groupId) return;
+
+      let selectedSet = cardSelectedBillings.get(groupId);
+      if (!selectedSet) {
+        selectedSet = new Set();
+        cardSelectedBillings.set(groupId, selectedSet);
+      }
+
+      if (cb.checked) {
+        selectedSet.add(billingIndex);
+      } else {
+        selectedSet.delete(billingIndex);
+      }
+
+      updateBatchSection();
+      // グループヘッダーのチェックボックスも更新
+      const group = cardBillingGroups.find(g => g.id === groupId);
+      if (group) {
+        const groupCb = cardGroupsContainer.querySelector<HTMLInputElement>(`.card-group-checkbox[data-group-id="${groupId}"]`);
+        if (groupCb) {
+          const duplicateResults = cardDuplicateResults.get(groupId) || [];
+          const selectableCount = group.billings.filter((billing, idx) => {
+            const isDuplicate = duplicateResults.some(r => 
+              r.billing.paymentDate === billing.paymentDate && 
+              r.billing.amount === billing.amount && 
+              r.isDuplicate
+            );
+            return !isDuplicate;
+          }).length;
+          groupCb.checked = selectedSet.size === selectableCount && selectableCount > 0;
+        }
+      }
+    });
+  });
+}
+
+// ── Update Batch Section ──
+function updateBatchSection() {
+  // 選択中の件数を計算
+  let totalSelected = 0;
+  for (const selectedSet of cardSelectedBillings.values()) {
+    totalSelected += selectedSet.size;
+  }
+
+  // 一括操作セクションの表示/非表示
+  if (cardBatchSection) {
+    cardBatchSection.style.display = cardBillingGroups.length > 0 ? 'block' : 'none';
+  }
+
+  // 選択件数を更新
+  if (cardBatchCount) {
+    cardBatchCount.textContent = `${totalSelected}件選択中`;
+  }
+
+  // ボタンの状態を更新
+  if (cardBatchCheck) {
+    const totalBillings = cardBillingGroups.reduce((sum, g) => sum + g.billings.length, 0);
+    cardBatchCheck.disabled = totalBillings === 0;
+  }
+
+  if (cardBatchAdd) {
+    cardBatchAdd.disabled = totalSelected === 0;
+    cardBatchAdd.textContent = `📤 選択をNotionに追加 (${totalSelected}件)`;
+  }
+
+  // 重複チェック結果の表示
+  if (cardBatchResult && cardHasCheckedDuplicates) {
+    let totalNew = 0;
+    let totalDuplicate = 0;
+
+    for (const results of cardDuplicateResults.values()) {
+      for (const r of results) {
+        if (r.isDuplicate) {
+          totalDuplicate++;
+        } else {
+          totalNew++;
+        }
+      }
+    }
+
+    cardBatchResult.style.display = 'block';
+    if (cardBatchNewCount) cardBatchNewCount.textContent = String(totalNew);
+    if (cardBatchDuplicateCount) cardBatchDuplicateCount.textContent = String(totalDuplicate);
+  } else if (cardBatchResult) {
+    cardBatchResult.style.display = 'none';
+  }
+}
+
+// ── Show Card Status ──
+function showCardStatus(message: string, type: 'success' | 'error' | 'info') {
+  if (!cardStatus) return;
+  cardStatus.textContent = message;
+  cardStatus.className = `card-status ${type}`;
+}
+
+// ── Batch Check Card Duplicates ──
+async function batchCheckCardDuplicates() {
+  if (cardBillingGroups.length === 0) {
+    showToast('チェックするデータがありません', 'error');
+    return;
+  }
+
+  if (cardBatchCheck) cardBatchCheck.disabled = true;
+  showCardStatus('Notionと照合中...', 'info');
+
+  try {
+    // 全グループのbillingを集める
+    const allBillings: CardBilling[] = [];
+    for (const group of cardBillingGroups) {
+      allBillings.push(...group.billings);
+    }
+
+    const result = await chrome.runtime.sendMessage({
+      action: 'CHECK_CARD_BILLING_DUPLICATES',
+      payload: { billings: allBillings },
+    });
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    // 結果をグループごとに振り分け
+    cardDuplicateResults.clear();
+    const duplicateBillings: CardBilling[] = result.duplicates?.map((d: { billing: CardBilling }) => d.billing) || [];
+    const newBillings: CardBilling[] = result.newBillings || [];
+
+    for (const group of cardBillingGroups) {
+      const groupResults: { billing: CardBilling; isDuplicate: boolean }[] = [];
+      
+      for (const billing of group.billings) {
+        const isDuplicate = duplicateBillings.some(d => 
+          d.cardCompany === billing.cardCompany &&
+          d.cardName === billing.cardName &&
+          d.paymentDate === billing.paymentDate &&
+          d.amount === billing.amount
+        );
+        groupResults.push({ billing, isDuplicate });
+      }
+      
+      cardDuplicateResults.set(group.id, groupResults);
+    }
+
+    cardHasCheckedDuplicates = true;
+
+    // 選択状態を更新（重複は選択解除）
+    for (const [groupId, results] of cardDuplicateResults) {
+      const selectedSet = cardSelectedBillings.get(groupId) || new Set<number>();
+      const group = cardBillingGroups.find(g => g.id === groupId);
+      if (!group) continue;
+
+      // 新規のものを全て選択
+      const newSelectedSet = new Set<number>();
+      results.forEach((r, index) => {
+        if (!r.isDuplicate) {
+          newSelectedSet.add(index);
+        }
+      });
+      cardSelectedBillings.set(groupId, newSelectedSet);
+    }
+
+    // UI更新
+    displayCardGroups();
+    updateBatchSection();
+
+    const dupCount = duplicateBillings.length;
+    const newCount = newBillings.length;
+    if (dupCount > 0) {
+      showCardStatus(`${dupCount}件の重複、${newCount}件が新規です`, 'info');
+    } else {
+      showCardStatus(`${newCount}件すべて新規です`, 'success');
+    }
+  } catch (err: any) {
+    showCardStatus(`エラー: ${err.message}`, 'error');
+  } finally {
+    if (cardBatchCheck) cardBatchCheck.disabled = false;
+  }
+}
+
+// ── Batch Add Card Billings to Notion ──
+async function batchAddCardBillingsToNotion() {
+  // 選択されたbillingを集める
+  const billingsToAdd: CardBilling[] = [];
+  
+  for (const [groupId, selectedSet] of cardSelectedBillings) {
+    const group = cardBillingGroups.find(g => g.id === groupId);
+    if (!group) continue;
+
+    for (const index of selectedSet) {
+      if (group.billings[index]) {
+        billingsToAdd.push(group.billings[index]);
+      }
+    }
+  }
+
+  if (billingsToAdd.length === 0) {
+    showToast('追加する項目を選択してください', 'error');
+    return;
+  }
+
+  if (cardBatchAdd) {
+    cardBatchAdd.disabled = true;
+    cardBatchAdd.textContent = '📤 追加中...';
+  }
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'SAVE_CARD_BILLING',
+      payload: { billings: billingsToAdd },
+    });
+
+    if (result?.error) {
+      throw new Error(result.error);
+    }
+
+    showToast(`${result.count}件の引き落としをNotionに追加しました ✓`, 'success');
+
+    // 追加したbillingをグループから削除
+    for (const [groupId, selectedSet] of cardSelectedBillings) {
+      const groupIndex = cardBillingGroups.findIndex(g => g.id === groupId);
+      if (groupIndex < 0) continue;
+
+      const group = cardBillingGroups[groupIndex];
+      const newBillings = group.billings.filter((_, index) => !selectedSet.has(index));
+
+      if (newBillings.length === 0) {
+        // グループが空になったら削除
+        cardBillingGroups.splice(groupIndex, 1);
+        cardDuplicateResults.delete(groupId);
+      } else {
+        group.billings = newBillings;
+        // 重複チェック結果も更新
+        const dupResults = cardDuplicateResults.get(groupId);
+        if (dupResults) {
+          const newDupResults = dupResults.filter((_, index) => !selectedSet.has(index));
+          cardDuplicateResults.set(groupId, newDupResults);
+        }
+      }
+    }
+
+    // 選択状態をクリア
+    cardSelectedBillings.clear();
+
+    // セッションストレージに保存
+    await saveCardStock({
+      groups: cardBillingGroups,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    // UI更新
+    displayCardGroups();
+    updateBatchSection();
+    showCardStatus(`${result.count}件をNotionに追加しました`, 'success');
+  } catch (err: any) {
+    showToast(`エラー: ${err.message}`, 'error');
+  } finally {
+    updateBatchSection();
+  }
+}
 
 // ── Start ──
 init();

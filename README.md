@@ -1,91 +1,91 @@
 # 📝 Sidescribe
 
-Your intelligent sidebar scribe — a Chrome extension that extracts web data and syncs with Notion.
+Webデータを抽出してNotionと同期する、賢いサイドバーChrome拡張機能。
 
-## Features
+## 機能
 
-- **Quick Memo** — Save any page (URL + title + note) to a Notion database with one click
-- **Bank Sync** — Extract transaction history from 住信SBIネット銀行 and export to Notion
-- **Card Statements** — Pull billing data from credit card sites and register in Notion
-- **Site-Specific Actions** — Special integrations for Suica, Gaba, and more
+- **クイックメモ** — ワンクリックでページ（URL + タイトル + メモ）をNotionデータベースに保存
+- **銀行同期** — 住信SBIネット銀行から取引履歴を抽出してNotionにエクスポート
+- **カード明細** — クレジットカードサイトから請求データを取得してNotionに登録
+- **サイト固有アクション** — Suica、Gabaなど向けの特別な連携
 
-## Setup
+## セットアップ
 
-### Prerequisites
+### 前提条件
 
-- Node.js 18+
-- A [Notion Internal Integration](https://www.notion.so/my-integrations) token
+- Node.js 18以上
+- [Notion内部インテグレーション](https://www.notion.so/my-integrations)のトークン
 
-### Install & Build
+### インストール & ビルド
 
 ```bash
 npm install
-npm run dev    # development (watch mode)
-npm run build  # production build
+npm run dev    # 開発モード（ウォッチ）
+npm run build  # 本番ビルド
 ```
 
-### Load in Chrome
+### Chromeに読み込む
 
-1. Open `chrome://extensions/`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `dist/` folder
+1. `chrome://extensions/` を開く
+2. **デベロッパーモード**を有効化
+3. **パッケージ化されていない拡張機能を読み込む** → `dist/` フォルダを選択
 
-### Configure
+### 設定
 
-1. Click the Sidescribe icon → ⚙️ Settings
-2. Enter your Notion API key
-3. Enter the database IDs for each feature
+1. Sidescribeアイコンをクリック → ⚙️ 設定
+2. Notion APIキーを入力
+3. 各機能用のデータベースIDを入力
 
-## Notion Database Schemas
+## Notionデータベースのスキーマ
 
-### Memo Database
+### メモ用データベース
 
-| Property   | Type       |
-|------------|------------|
-| Title      | Title      |
-| URL        | URL        |
-| Note       | Rich Text  |
-| Created At | Date       |
+| プロパティ | 種類           |
+|------------|----------------|
+| Title      | タイトル       |
+| URL        | URL            |
+| Note       | リッチテキスト |
+| Created At | 日付           |
 
-### Bank Transaction Database
+### 銀行取引データベース
 
-| Property    | Type      |
-|-------------|-----------|
-| Description | Title     |
-| Date        | Date      |
-| Withdrawal  | Number    |
-| Deposit     | Number    |
-| Balance     | Number    |
-| Memo        | Rich Text |
+| プロパティ  | 種類           |
+|-------------|----------------|
+| Description | タイトル       |
+| Date        | 日付           |
+| Withdrawal  | 数値（出金）   |
+| Deposit     | 数値（入金）   |
+| Balance     | 数値（残高）   |
+| Memo        | リッチテキスト |
 
-### Card Statement Database
+### カード明細データベース
 
-| Property    | Type      |
-|-------------|-----------|
-| Description | Title     |
-| Date        | Date      |
-| Amount      | Number    |
-| Card Name   | Rich Text |
-| Category    | Rich Text |
+| プロパティ  | 種類           |
+|-------------|----------------|
+| Description | タイトル       |
+| Date        | 日付           |
+| Amount      | 数値           |
+| Card Name   | リッチテキスト |
+| Category    | リッチテキスト |
 
-## Project Structure
+## プロジェクト構成
 
 ```
 sidescribe/
-├── manifest.json           # Chrome Extension Manifest V3
+├── manifest.json           # Chrome拡張 Manifest V3
 ├── webpack.config.js
 ├── src/
 │   ├── background/         # Service Worker
-│   ├── sidepanel/          # Sidebar UI (main interface)
-│   ├── options/            # Settings page
-│   ├── content/            # Content scripts (page data extraction)
-│   ├── modules/            # Notion API client, etc.
-│   ├── types/              # TypeScript type definitions
-│   └── utils/              # Shared utilities
+│   ├── sidepanel/          # サイドバーUI（メインインターフェース）
+│   ├── options/            # 設定ページ
+│   ├── content/            # コンテンツスクリプト（ページデータ抽出）
+│   ├── modules/            # Notion APIクライアントなど
+│   ├── types/              # TypeScript型定義
+│   └── utils/              # 共有ユーティリティ
 ├── icons/
-└── dist/                   # Build output (load this in Chrome)
+└── dist/                   # ビルド出力（これをChromeに読み込む）
 ```
 
-## License
+## ライセンス
 
 MIT
