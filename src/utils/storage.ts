@@ -5,7 +5,6 @@ const MAPPING_KEYS = [
   'memoDbMapping',
   'bankDbMapping',
   'cardDbMapping',
-  'gabaDbMapping',
   'suicaDbMapping',
 ];
 

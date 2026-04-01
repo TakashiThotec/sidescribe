@@ -1,4 +1,4 @@
-import { PageMemo, BankTransaction, CardStatement, GabaLesson, SuicaTransaction, NotionDatabaseProperty, CardBilling } from '../types';
+import { PageMemo, BankTransaction, CardStatement, SuicaTransaction, NotionDatabaseProperty, CardBilling } from '../types';
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -159,70 +159,6 @@ class NotionClient {
     }
     if (mapping?.categoryProperty && stmt.category) {
       properties[mapping.categoryProperty] = { rich_text: [{ text: { content: stmt.category } }] };
-    }
-
-    return this.request('/pages', {
-      method: 'POST',
-      body: JSON.stringify({
-        parent: { database_id: databaseId },
-        properties,
-      }),
-    });
-  }
-
-  // ── Gaba Lessons ──
-  async saveGabaLesson(databaseId: string, lesson: GabaLesson, mapping?: {
-    titleProperty?: string;
-    dateProperty?: string;
-    timeProperty?: string;
-    lsProperty?: string;
-    statusProperty?: string;
-  }) {
-    // Parse date and time
-    const dateMatch = lesson.date.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-    const timeMatch = lesson.time.match(/(\d{1,2}):(\d{2})/);
-
-    if (!dateMatch || !timeMatch) {
-      throw new Error('Invalid date or time format');
-    }
-
-    const year = parseInt(dateMatch[1]);
-    const month = String(parseInt(dateMatch[2])).padStart(2, '0');
-    const day = String(parseInt(dateMatch[3])).padStart(2, '0');
-    const hour = String(parseInt(timeMatch[1])).padStart(2, '0');
-    const minute = timeMatch[2];
-
-    // Create start and end times (40 min lesson)
-    const startTime = `${year}-${month}-${day}T${hour}:${minute}:00`;
-    const endDate = new Date(year, parseInt(dateMatch[2]) - 1, parseInt(dateMatch[3]), parseInt(timeMatch[1]), parseInt(timeMatch[2]) + 40);
-    const endHour = String(endDate.getHours()).padStart(2, '0');
-    const endMinute = String(endDate.getMinutes()).padStart(2, '0');
-    const endTime = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${endHour}:${endMinute}:00`;
-
-    const title = `【Gaba】レッスン（${lesson.time}）`;
-
-    const properties: Record<string, unknown> = {};
-
-    if (mapping?.titleProperty) {
-      properties[mapping.titleProperty] = { title: [{ text: { content: title } }] };
-    }
-    if (mapping?.dateProperty) {
-      properties[mapping.dateProperty] = {
-        date: {
-          start: startTime,
-          end: endTime,
-          time_zone: 'Asia/Tokyo',
-        },
-      };
-    }
-    if (mapping?.timeProperty) {
-      properties[mapping.timeProperty] = { rich_text: [{ text: { content: lesson.time } }] };
-    }
-    if (mapping?.lsProperty && lesson.ls) {
-      properties[mapping.lsProperty] = { rich_text: [{ text: { content: lesson.ls } }] };
-    }
-    if (mapping?.statusProperty) {
-      properties[mapping.statusProperty] = { select: { name: lesson.status === 'completed' ? 'Completed' : 'Reserved' } };
     }
 
     return this.request('/pages', {

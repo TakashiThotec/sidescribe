@@ -10,7 +10,6 @@ const notionApiKey = $<HTMLInputElement>('notion-api-key');
 const memoDbId = $<HTMLInputElement>('memo-db-id');
 const bankDbId = $<HTMLInputElement>('bank-db-id');
 const cardDbId = $<HTMLInputElement>('card-db-id');
-const gabaDbId = $<HTMLInputElement>('gaba-db-id');
 const saveStatus = $<HTMLSpanElement>('save-status');
 
 // ── DB Mapping configurations ──
@@ -58,19 +57,6 @@ const dbConfigs: Record<string, DbConfig> = {
       { selectId: 'card-map-amount', expectedType: 'number', fieldKey: 'amountProperty' },
       { selectId: 'card-map-cardname', expectedType: 'rich_text', fieldKey: 'cardNameProperty' },
       { selectId: 'card-map-category', expectedType: 'rich_text', fieldKey: 'categoryProperty' },
-    ],
-  },
-  gaba: {
-    inputId: 'gaba-db-id',
-    fetchBtnId: 'gaba-fetch-schema',
-    mappingPanelId: 'gaba-mapping',
-    mappingKey: 'gabaDbMapping',
-    mappingFields: [
-      { selectId: 'gaba-map-title', expectedType: 'title', fieldKey: 'titleProperty' },
-      { selectId: 'gaba-map-date', expectedType: 'date', fieldKey: 'dateProperty' },
-      { selectId: 'gaba-map-time', expectedType: 'rich_text', fieldKey: 'timeProperty' },
-      { selectId: 'gaba-map-ls', expectedType: 'rich_text', fieldKey: 'lsProperty' },
-      { selectId: 'gaba-map-status', expectedType: 'select', fieldKey: 'statusProperty' },
     ],
   },
 };
@@ -219,8 +205,6 @@ async function loadSettings() {
   memoDbId.value = settings.memoDatabaseId;
   bankDbId.value = settings.bankTransactionDatabaseId;
   cardDbId.value = settings.cardStatementDatabaseId;
-  gabaDbId.value = settings.gabaDatabaseId;
-
   // Set API key for Notion client
   if (settings.notionApiKey) {
     notion.setApiKey(settings.notionApiKey);
@@ -231,7 +215,6 @@ async function loadSettings() {
     memo: settings.memoDbMapping as any,
     bank: settings.bankDbMapping as any,
     card: settings.cardDbMapping as any,
-    gaba: settings.gabaDbMapping as any,
   };
 
   console.log('[Sidescribe] Loaded mappings:', mappings);
@@ -272,7 +255,6 @@ form.addEventListener('submit', async (e) => {
     memoDatabaseId: memoDbId.value.trim(),
     bankTransactionDatabaseId: bankDbId.value.trim(),
     cardStatementDatabaseId: cardDbId.value.trim(),
-    gabaDatabaseId: gabaDbId.value.trim(),
   });
 
   showStatus('✓ 保存しました');

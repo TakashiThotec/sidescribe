@@ -1,0 +1,30 @@
+---
+description: コーディング規約と命名規則
+globs:
+  - src/**
+alwaysApply: false
+---
+
+# コーディング規約
+
+- **日本語コメント**: 可
+- **変数名**: キャメルケース（`gabaReservations`）
+- **関数名**: キャメルケース、動詞で始める（`loadGabaReservations`）
+- **定数**: 大文字スネークケース（`CALENDAR_EVENT_PRE_OFFSET_MINUTES`）
+- **CSSクラス**: ケバブケース、機能名プレフィックス（`gaba-item`, `sbi-status`）
+
+# よくある問題と解決策
+
+### コンテンツスクリプトが動作しない
+- manifest.jsonの`matches`パターンを確認
+- 拡張機能をリロード
+- ページを再読み込み
+
+### Notion APIエラー
+- APIキーの形式を確認（`secret_`で始まる）
+- データベースIDの形式を確認（ハイフンなしの32文字）
+- データベースがインテグレーションと共有されているか確認
+
+### 型エラー
+- `npm run build`でTypeScriptエラーを確認
+- `types/index.ts`に必要な型が定義されているか確認

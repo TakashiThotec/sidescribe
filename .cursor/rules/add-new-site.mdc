@@ -1,0 +1,47 @@
+---
+description: 新しいサイト対応を追加する際のガイドライン
+globs:
+  - src/content/**
+  - src/sidepanel/**
+  - src/types/**
+  - manifest.json
+alwaysApply: false
+---
+
+# 新しいサイト対応を追加する場合
+
+1. **manifest.json**に`host_permissions`と`content_scripts.matches`を追加
+2. **content.ts**にサイト固有の抽出関数を追加（例: `getAmexBilling()`）
+3. **types/index.ts**に必要な型を定義
+4. **sidepanel.ts**のタブ設定（`TAB_CONFIGS`）を更新
+5. **sidepanel.html**にUIを追加
+
+## DOM抽出のベストプラクティス
+
+- **複数のセレクタ戦略**: 主要セレクタが見つからない場合のフォールバックを用意
+- **エラーハンドリング**: 各要素の取得を`try-catch`で囲む
+- **ログ出力**: `console.log('[Sidescribe]')`プレフィックスで出力
+- **日本語対応**: 日付形式は「YYYY/MM/DD」「M月D日」など複数パターンに対応
+
+```typescript
+// 良い例
+function extractData() {
+  try {
+    const element = document.querySelector('.primary-selector');
+    if (!element) {
+      const fallback = document.querySelector('.fallback-selector');
+      if (!fallback) return { success: false, data: [], error: 'Element not found' };
+    }
+    // ...
+  } catch (err) {
+    console.error('[Sidescribe] Error:', err);
+    return { success: false, data: [], error: String(err) };
+  }
+}
+```
+
+## メッセージアクション追加
+
+1. `types/index.ts`の`MessageAction`型に追加
+2. `service-worker.ts`のメッセージリスナーにハンドラを追加
+3. `content.ts`にコンテンツ側のハンドラを追加（必要な場合）

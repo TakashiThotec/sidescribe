@@ -1,0 +1,31 @@
+---
+description: Notion APIプロパティマッピングとストレージのパターン
+globs:
+  - src/modules/notion.ts
+  - src/types/**
+  - src/utils/storage.ts
+  - src/options/**
+alwaysApply: false
+---
+
+# Notion APIプロパティマッピング
+
+データベースのプロパティ名はユーザーが自由に設定できるため、ハードコードせずにマッピングを使う：
+
+```typescript
+// types/index.ts
+export interface BankDbMapping {
+  recordProperty: string;    // 取引内容 (title)
+  dateProperty: string;      // 日付 (date)
+  valueProperty: string;     // 金額 (number)
+  flowProperty: string;      // in/out (select)
+}
+```
+
+設定画面でユーザーがマッピングを設定し、`chrome.storage.sync`に保存。
+
+# 状態管理
+
+- **永続データ**: `chrome.storage.sync`（設定、APIキーなど）
+- **セッションデータ**: `chrome.storage.session`（一時的なストック）
+- **UIステート**: サイドパネル内のグローバル変数

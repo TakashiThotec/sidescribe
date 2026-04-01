@@ -1,4 +1,135 @@
-import { Message, GabaLesson, SuicaTransaction, BankTransaction, CardBilling } from '../types';
+import { Message, SuicaTransaction, BankTransaction, CardBilling } from '../types';
+
+// ── X/Twitter: タブ操作 ──
+const isXSite = window.location.hostname === 'x.com' || window.location.hostname === 'twitter.com';
+
+// Xのタイムラインタブ要素を探す汎用関数
+function findXTimelineTabs(): { forYou: HTMLElement | null; following: HTMLElement | null; all: { text: string; tag: string; el: HTMLElement }[] } {
+  let forYou: HTMLElement | null = null;
+  let following: HTMLElement | null = null;
+  const all: { text: string; tag: string; el: HTMLElement }[] = [];
+
+  // 候補セレクタを順番に試す
+  const selectors = [
+    '[role="tab"]',
+    '[role="tablist"] a',
+    '[data-testid="ScrollSnap-List"] a',
+    'nav [role="presentation"] a',
+  ];
+
+  for (const selector of selectors) {
+    document.querySelectorAll<HTMLElement>(selector).forEach((el) => {
+      const text = el.textContent?.trim() || '';
+      all.push({ text, tag: el.tagName, el });
+      if (text === 'おすすめ' || text === 'For you') forYou = el;
+      if (text === 'フォロー中' || text === 'Following') following = el;
+    });
+    if (forYou || following) break;
+  }
+
+  return { forYou, following, all };
+}
+
+function getXTabStatus() {
+  const { forYou, following, all } = findXTimelineTabs();
+  const forYouHidden = forYou ? forYou.style.display === 'none' : false;
+  // aria-selected で現在のアクティブタブを判定
+  const activeTab = all.find((t) => t.el.getAttribute('aria-selected') === 'true')?.text || 'unknown';
+  return {
+    forYouFound: !!forYou,
+    followingFound: !!following,
+    forYouHidden,
+    activeTab,
+    allTabs: all.map((t) => ({ text: t.text, tag: t.tag })),
+  };
+}
+
+function xSwitchToFollowing(): { success: boolean; message: string } {
+  const { following } = findXTimelineTabs();
+  if (!following) return { success: false, message: '「フォロー中」タブが見つかりません' };
+  following.click();
+  return { success: true, message: '「フォロー中」に切り替えました' };
+}
+
+function xSwitchToForYou(): { success: boolean; message: string } {
+  const { forYou } = findXTimelineTabs();
+  if (!forYou) return { success: false, message: '「おすすめ」タブが見つかりません' };
+  // 非表示を解除してクリック
+  forYou.style.display = '';
+  forYou.click();
+  return { success: true, message: '「おすすめ」に切り替えました' };
+}
+
+function xHideForYouTab(): { success: boolean; message: string } {
+  const { forYou, following } = findXTimelineTabs();
+  if (!forYou) return { success: false, message: '「おすすめ」タブが見つかりません' };
+
+  // まずフォロー中に切り替え
+  if (following) {
+    const isForYouActive = forYou.getAttribute('aria-selected') === 'true';
+    if (isForYouActive) following.click();
+  }
+
+  // おすすめを非表示
+  forYou.style.display = 'none';
+  return { success: true, message: '「おすすめ」を非表示にしました' };
+}
+
+// 自動実行: ページ読み込み時にフォロー中へ切り替え＋おすすめ非表示
+if (isXSite) {
+  let switched = false;
+  const autoSwitch = () => {
+    const { forYou, following } = findXTimelineTabs();
+    if (following && !switched) {
+      const isForYouActive = forYou?.getAttribute('aria-selected') === 'true';
+      if (isForYouActive) {
+        following.click();
+        console.log('[Sidescribe] 「フォロー中」に自動切り替え');
+      }
+      if (forYou) forYou.style.display = 'none';
+      switched = true;
+    }
+  };
+
+  autoSwitch();
+  const observer = new MutationObserver(() => {
+    autoSwitch();
+    hideXAds();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// ── X/Twitter: 広告を非表示 ──
+function hideXAds() {
+  document.querySelectorAll<HTMLElement>('[data-testid="cellInnerDiv"]').forEach((cell) => {
+    if (cell.dataset.sidescribeChecked) return;
+    cell.dataset.sidescribeChecked = 'true';
+
+    // 方法1: placementTracking（動画広告等）
+    if (cell.querySelector('[data-testid="placementTracking"]')) {
+      cell.style.display = 'none';
+      console.log('[Sidescribe] Ad hidden (placementTracking)');
+      return;
+    }
+
+    // 方法2: 「広告」「プロモーション」「Ad」「Promoted」ラベル
+    const spans = cell.querySelectorAll('span');
+    for (const span of spans) {
+      const t = span.textContent?.trim();
+      if (t === '広告' || t === 'Ad' || t === 'プロモーション' || t === 'Promoted') {
+        cell.style.display = 'none';
+        console.log('[Sidescribe] Ad hidden:', t);
+        return;
+      }
+    }
+
+    // 方法3: おすすめユーザー
+    if (cell.querySelector('a[href*="/i/connect_people"]')) {
+      cell.style.display = 'none';
+      console.log('[Sidescribe] "Who to follow" hidden');
+    }
+  });
+}
 
 // ── メッセージリスナー ──
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
@@ -15,15 +146,6 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       sendResponse(extractCardData());
       break;
 
-    // Gaba
-    case 'GET_GABA_RESERVATIONS':
-      sendResponse(getGabaReservations());
-      break;
-
-    case 'GET_GABA_COMPLETED':
-      sendResponse(getGabaCompletedLessons());
-      break;
-
     // Suica
     case 'GET_SUICA_DATA':
       sendResponse(getSuicaData());
@@ -32,6 +154,23 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
     // Card Billing
     case 'GET_CARD_BILLING':
       sendResponse(getCardBilling());
+      break;
+
+    // X/Twitter
+    case 'X_GET_STATUS':
+      sendResponse({ success: true, data: getXTabStatus() });
+      break;
+
+    case 'X_HIDE_FOR_YOU':
+      sendResponse({ success: true, data: xHideForYouTab() });
+      break;
+
+    case 'X_SWITCH_TO_FOR_YOU':
+      sendResponse({ success: true, data: xSwitchToForYou() });
+      break;
+
+    case 'X_SWITCH_TO_FOLLOWING':
+      sendResponse({ success: true, data: xSwitchToFollowing() });
       break;
 
     default:
@@ -142,131 +281,6 @@ function extractBankData(): { success: boolean; data: BankTransaction[]; period?
 function extractCardData() {
   // TODO: 各カード会社ごとの抽出ロジックを実装
   return { data: [], message: 'Card extraction not yet implemented' };
-}
-
-// ── Gaba予約情報を取得 ──
-function getGabaReservations(): { success: boolean; data: GabaLesson[]; error?: string } {
-  const hostname = window.location.hostname;
-  if (!hostname.includes('my.gaba.jp')) {
-    return { success: false, data: [], error: 'Not on Gaba MyPage' };
-  }
-
-  const reservations: GabaLesson[] = [];
-
-  try {
-    // 全てのmod-schedule-list要素を探す
-    const scheduleLists = document.querySelectorAll('.mod-schedule-list');
-
-    scheduleLists.forEach((scheduleList, listIndex) => {
-      // このリスト内の予約項目を取得
-      const items = scheduleList.querySelectorAll('ul.list li.row');
-
-      items.forEach((item, index) => {
-        try {
-          // 日付を取得
-          const dateElement = item.querySelector('.date .text .ymd');
-          const dateText = dateElement ? dateElement.textContent?.trim() || '' : '';
-
-          // 時間を取得
-          const timeElement = item.querySelector('.date .text .time');
-          const timeText = timeElement ? timeElement.textContent?.trim() || '' : '';
-
-          // LS情報を取得
-          const lsElement = item.querySelector('.date .ls');
-          const lsText = lsElement ? lsElement.textContent?.trim() || '' : '';
-
-          // 有効なデータがある場合のみ追加
-          if (dateText && timeText) {
-            // 日付を解析して今日以降かチェック
-            const dateMatch = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-            if (dateMatch) {
-              const year = parseInt(dateMatch[1]);
-              const month = parseInt(dateMatch[2]) - 1; // 月は0から始まる
-              const day = parseInt(dateMatch[3]);
-              const reservationDate = new Date(year, month, day);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-
-              // 今日以降の予約のみ追加
-              if (reservationDate >= today) {
-                reservations.push({
-                  id: `reservation-${listIndex}-${index}`,
-                  date: dateText,
-                  time: timeText,
-                  ls: lsText,
-                  status: 'reserved',
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.error('[Sidescribe] Error processing Gaba reservation item:', err);
-        }
-      });
-    });
-
-    return { success: true, data: reservations };
-  } catch (err) {
-    console.error('[Sidescribe] Error getting Gaba reservations:', err);
-    return { success: false, data: [], error: String(err) };
-  }
-}
-
-// ── Gaba終了済みレッスンを取得 ──
-function getGabaCompletedLessons(): { success: boolean; data: GabaLesson[]; error?: string } {
-  const hostname = window.location.hostname;
-  if (!hostname.includes('my.gaba.jp')) {
-    return { success: false, data: [], error: 'Not on Gaba MyPage' };
-  }
-
-  const completedLessons: GabaLesson[] = [];
-
-  try {
-    // 全てのmod-schedule-list要素を探す
-    const scheduleLists = document.querySelectorAll('.mod-schedule-list');
-
-    // 2番目以降のmod-schedule-list（終了済みレッスン）を処理
-    for (let listIndex = 1; listIndex < scheduleLists.length; listIndex++) {
-      const scheduleList = scheduleLists[listIndex];
-
-      // このリスト内の終了済みレッスン項目を取得
-      const items = scheduleList.querySelectorAll('ul.list li.row');
-
-      items.forEach((item, index) => {
-        try {
-          // 日付を取得
-          const dateElement = item.querySelector('.date .text .ymd');
-          const dateText = dateElement ? dateElement.textContent?.trim() || '' : '';
-
-          // 時間を取得
-          const timeElement = item.querySelector('.date .text .time');
-          const timeText = timeElement ? timeElement.textContent?.trim() || '' : '';
-
-          // LS情報を取得
-          const lsElement = item.querySelector('.date .ls');
-          const lsText = lsElement ? lsElement.textContent?.trim() || '' : '';
-
-          // 有効なデータがある場合のみ追加
-          if (dateText && timeText) {
-            completedLessons.push({
-              id: `completed-${listIndex}-${index}`,
-              date: dateText,
-              time: timeText,
-              ls: lsText,
-              status: 'completed',
-            });
-          }
-        } catch (err) {
-          console.error('[Sidescribe] Error processing Gaba completed lesson item:', err);
-        }
-      });
-    }
-
-    return { success: true, data: completedLessons };
-  } catch (err) {
-    console.error('[Sidescribe] Error getting Gaba completed lessons:', err);
-    return { success: false, data: [], error: String(err) };
-  }
 }
 
 // ── Suica履歴を取得 ──

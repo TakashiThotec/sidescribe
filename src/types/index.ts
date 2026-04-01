@@ -28,14 +28,6 @@ export interface CardDbMapping {
   categoryProperty: string;
 }
 
-export interface GabaDbMapping {
-  titleProperty: string;
-  dateProperty: string;
-  timeProperty: string;
-  lsProperty: string;
-  statusProperty: string;
-}
-
 export interface SuicaDbMapping {
   descriptionProperty: string;
   dateProperty: string;
@@ -49,13 +41,11 @@ export interface SidescribeSettings {
   memoDatabaseId: string;
   bankTransactionDatabaseId: string;
   cardStatementDatabaseId: string;
-  gabaDatabaseId: string;
   suicaDatabaseId: string;
   // Database property mappings
   memoDbMapping?: MemoDbMapping;
   bankDbMapping?: BankDbMapping;
   cardDbMapping?: CardDbMapping;
-  gabaDbMapping?: GabaDbMapping;
   suicaDbMapping?: SuicaDbMapping;
 }
 
@@ -64,7 +54,6 @@ export const DEFAULT_SETTINGS: SidescribeSettings = {
   memoDatabaseId: '',
   bankTransactionDatabaseId: '',
   cardStatementDatabaseId: '',
-  gabaDatabaseId: '',
   suicaDatabaseId: '',
 };
 
@@ -93,15 +82,6 @@ export interface CardStatement {
   amount: number;
   cardName: string;
   category?: string;
-}
-
-// ── Gaba Lesson ──
-export interface GabaLesson {
-  id: string;
-  date: string;        // "YYYY/M/D"
-  time: string;        // "HH:MM"
-  ls: string;          // Learning Studio情報
-  status: 'reserved' | 'completed';
 }
 
 // ── Suica Transaction ──
@@ -138,7 +118,7 @@ export interface CardBillingStock {
 }
 
 // ── Tab Type ──
-export type TabType = 'memo' | 'gaba' | 'suica' | 'sbi' | 'card';
+export type TabType = 'memo' | 'suica' | 'sbi' | 'card' | 'x';
 
 // ── Messages (background ↔ sidepanel ↔ content) ──
 export type MessageAction =
@@ -148,10 +128,6 @@ export type MessageAction =
   | 'EXTRACT_BANK_DATA'
   | 'EXTRACT_CARD_DATA'
   | 'OPEN_OPTIONS'
-  // Gaba
-  | 'GET_GABA_RESERVATIONS'
-  | 'GET_GABA_COMPLETED'
-  | 'SAVE_GABA_LESSONS'
   // Suica
   | 'GET_SUICA_DATA'
   | 'SAVE_SUICA_TRANSACTIONS'
@@ -164,7 +140,12 @@ export type MessageAction =
   | 'CHECK_CARD_BILLING_DUPLICATES'
   | 'SAVE_CARD_BILLING'
   // Tab context
-  | 'TAB_CONTEXT_CHANGED';
+  | 'TAB_CONTEXT_CHANGED'
+  // X/Twitter
+  | 'X_GET_STATUS'
+  | 'X_HIDE_FOR_YOU'
+  | 'X_SWITCH_TO_FOR_YOU'
+  | 'X_SWITCH_TO_FOLLOWING';
 
 export interface Message {
   action: MessageAction;

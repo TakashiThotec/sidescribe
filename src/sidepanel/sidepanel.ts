@@ -1,10 +1,6 @@
 import './sidepanel.css';
-import { PageInfo, PageMemo, TabType, GabaLesson, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock } from '../types';
+import { PageInfo, PageMemo, TabType, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock } from '../types';
 import { getSettings, isConfigured } from '../utils/storage';
-
-// ── Gaba Constants ──
-const CALENDAR_EVENT_PRE_OFFSET_MINUTES = 20;
-const CALENDAR_EVENT_POST_OFFSET_MINUTES = 70;
 
 // ── DOM Elements ──
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -33,10 +29,10 @@ interface TabConfig {
 }
 
 const TAB_CONFIGS: TabConfig[] = [
-  { tab: 'gaba', hostnames: ['my.gaba.jp'] },
   { tab: 'suica', hostnames: ['www.mobilesuica.com', 'www.jreast.co.jp'] },
   { tab: 'sbi', hostnames: ['www.netbk.co.jp'] },
   { tab: 'card', hostnames: ['global.americanexpress.com', 'www.smbc-card.com'] },
+  { tab: 'x', hostnames: ['x.com', 'twitter.com'] },
 ];
 
 // ── Site-specific action definitions ──
@@ -50,15 +46,6 @@ interface SiteAction {
 const SITE_ACTIONS: SiteAction[] = [
   // カード会社は今後追加
 ];
-
-// ── Gaba DOM Elements ──
-const gabaSubtabs = document.querySelectorAll<HTMLButtonElement>('.gaba-subtab');
-const gabaSubtabContents = document.querySelectorAll<HTMLDivElement>('.gaba-subtab-content');
-const gabaReservationsList = $<HTMLDivElement>('gaba-reservations-list');
-const gabaCompletedList = $<HTMLDivElement>('gaba-completed-list');
-const gabaReloadReservations = $<HTMLButtonElement>('gaba-reload-reservations');
-const gabaReloadCompleted = $<HTMLButtonElement>('gaba-reload-completed');
-const gabaSortOrder = $<HTMLInputElement>('gaba-sort-order');
 
 // ── Suica DOM Elements ──
 const suicaStatus = $<HTMLDivElement>('suica-status');
@@ -100,10 +87,15 @@ const cardBatchDuplicateCount = $<HTMLSpanElement>('card-batch-duplicate-count')
 const cardBatchCheck = $<HTMLButtonElement>('card-batch-check');
 const cardBatchAdd = $<HTMLButtonElement>('card-batch-add');
 
+// ── X/Twitter DOM Elements ──
+const xStatus = $<HTMLDivElement>('x-status');
+const xShowForYou = $<HTMLButtonElement>('x-show-foryou');
+const xHideForYou = $<HTMLButtonElement>('x-hide-foryou');
+const xRefresh = $<HTMLButtonElement>('x-refresh');
+const xDebug = $<HTMLPreElement>('x-debug');
+
 // ── Current State ──
 let currentHostname = '';
-let gabaReservations: GabaLesson[] = [];
-let gabaCompletedLessons: GabaLesson[] = [];
 let suicaTransactions: SuicaTransaction[] = [];
 let suicaFilteredTransactions: SuicaTransaction[] = [];
 let suicaSettings = {
@@ -199,23 +191,6 @@ tabButtons.forEach((btn) => {
   });
 });
 
-// ── Gaba Subtab Click Handler ──
-gabaSubtabs.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const subtab = btn.dataset.gabaTab;
-    showGabaSubtab(subtab || 'reservations');
-  });
-});
-
-function showGabaSubtab(subtab: string) {
-  gabaSubtabs.forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.gabaTab === subtab);
-  });
-  gabaSubtabContents.forEach((content) => {
-    content.classList.toggle('active', content.id === `gaba-${subtab}`);
-  });
-}
-
 // ── Init ──
 async function init() {
   const settings = await getSettings();
@@ -253,11 +228,6 @@ async function init() {
       notConfigured.style.display = 'none';
     }
 
-    // Gabaタブの初期化
-    if (pageInfo.hostname.includes('my.gaba.jp')) {
-      initGabaTab();
-    }
-
     // Suicaタブの初期化
     if (isSuicaSite) {
       initSuicaTab();
@@ -271,6 +241,13 @@ async function init() {
     // カードタブの初期化（カードサイトのみ）
     if (isCardSite) {
       await initCardTab();
+    }
+
+    // X/Twitterの初期化
+    const isXSite = pageInfo.hostname === 'x.com' || pageInfo.hostname === 'twitter.com';
+    if (isXSite) {
+      notConfigured.style.display = 'none';
+      initXTab();
     }
   } catch (err) {
     pageHostname.textContent = 'ページ情報を取得できません';
@@ -390,221 +367,76 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 // ══════════════════════════════════════════════════════════
-// Gaba Functions
+// X/Twitter Functions
 // ══════════════════════════════════════════════════════════
 
-// ── Gaba Event Listeners ──
-gabaReloadReservations?.addEventListener('click', () => loadGabaReservations());
-gabaReloadCompleted?.addEventListener('click', () => loadGabaCompletedLessons());
-gabaSortOrder?.addEventListener('change', () => displayGabaReservations());
-
-// ── Load Gaba Reservations ──
-async function loadGabaReservations() {
-  if (!currentHostname.includes('my.gaba.jp')) return;
-
-  gabaReservationsList.innerHTML = '<div class="gaba-loading">予約を読み込み中...</div>';
-
+async function xGetStatus() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('No active tab');
-
-    const result = await sendMessageToTab<{ success: boolean; data: GabaLesson[]; error?: string }>(tab.id, { action: 'GET_GABA_RESERVATIONS' });
-    if (!result?.success) throw new Error(result?.error || 'Failed to get reservations');
-
-    gabaReservations = result.data;
-    displayGabaReservations();
-  } catch (err: any) {
-    gabaReservationsList.innerHTML = `<div class="gaba-error">${err.message}</div>`;
+    if (!tab?.id) return null;
+    return await sendMessageToTab<{ success: boolean; data: any }>(tab.id, { action: 'X_GET_STATUS' });
+  } catch {
+    return null;
   }
 }
 
-// ── Load Gaba Completed Lessons ──
-async function loadGabaCompletedLessons() {
-  if (!currentHostname.includes('my.gaba.jp')) return;
-
-  gabaCompletedList.innerHTML = '<div class="gaba-loading">終了済みレッスンを読み込み中...</div>';
-
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('No active tab');
-
-    const result = await sendMessageToTab<{ success: boolean; data: GabaLesson[]; error?: string }>(tab.id, { action: 'GET_GABA_COMPLETED' });
-    if (!result?.success) throw new Error(result?.error || 'Failed to get completed lessons');
-
-    gabaCompletedLessons = result.data;
-    displayGabaCompletedLessons();
-  } catch (err: any) {
-    gabaCompletedList.innerHTML = `<div class="gaba-error">${err.message}</div>`;
-  }
+async function xSendAction(action: string) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) throw new Error('No active tab');
+  return await sendMessageToTab<{ success: boolean; data: { success: boolean; message: string } }>(tab.id, { action });
 }
 
-// ── Display Gaba Reservations ──
-function displayGabaReservations() {
-  if (gabaReservations.length === 0) {
-    gabaReservationsList.innerHTML = `
-      <div class="gaba-empty">
-        <p>予約がありません</p>
-        <a href="https://my.gaba.jp/schedule" target="_blank" class="gaba-link-btn">スケジュールを確認</a>
-      </div>
-    `;
+async function refreshXStatus() {
+  if (!xStatus) return;
+  xStatus.textContent = '確認中...';
+  xStatus.className = 'x-status';
+
+  const result = await xGetStatus();
+  if (!result?.success) {
+    xStatus.textContent = 'Content scriptに接続できません。ページを再読み込みしてください。';
+    xStatus.className = 'x-status error';
+    if (xDebug) xDebug.textContent = 'No response';
     return;
   }
 
-  const sortAsc = gabaSortOrder?.checked ?? true;
-  const sorted = [...gabaReservations].sort((a, b) => {
-    const dateA = parseGabaDate(a.date, a.time);
-    const dateB = parseGabaDate(b.date, b.time);
-    return sortAsc ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
-  });
+  const data = result.data;
+  const statusParts: string[] = [];
+  if (data.forYouFound) statusParts.push(`おすすめ: ${data.forYouHidden ? '非表示' : '表示中'}`);
+  else statusParts.push('おすすめ: 未検出');
+  if (data.followingFound) statusParts.push('フォロー中: 検出済み');
+  else statusParts.push('フォロー中: 未検出');
+  statusParts.push(`アクティブ: ${data.activeTab}`);
 
-  gabaReservationsList.innerHTML = sorted.map((lesson) => renderGabaItem(lesson)).join('');
-  attachGabaNotionListeners(gabaReservationsList, sorted);
+  xStatus.textContent = statusParts.join(' / ');
+  xStatus.className = 'x-status success';
+
+  if (xDebug) xDebug.textContent = JSON.stringify(data, null, 2);
 }
 
-// ── Display Gaba Completed Lessons ──
-function displayGabaCompletedLessons() {
-  if (gabaCompletedLessons.length === 0) {
-    gabaCompletedList.innerHTML = '<div class="gaba-empty">終了済みレッスンがありません</div>';
-    return;
-  }
+function initXTab() {
+  refreshXStatus();
 
-  gabaCompletedList.innerHTML = gabaCompletedLessons.map((lesson) => renderGabaItem(lesson)).join('');
-  attachGabaNotionListeners(gabaCompletedList, gabaCompletedLessons);
-}
-
-// ── Render Gaba Item ──
-function renderGabaItem(lesson: GabaLesson): string {
-  const calendarLink = generateGoogleCalendarLink(lesson);
-  
-  // 日付に曜日が含まれているかチェック（例: "2026/02/04 (水)"）
-  const hasDay = /\([日月火水木金土]\)/.test(lesson.date);
-  const dayOfWeek = hasDay ? '' : `(${getGabaDayOfWeek(lesson.date)})`;
-  
-  // 日付表示を構築（曜日が重複しないように）
-  const dateDisplay = hasDay ? lesson.date : `${lesson.date} ${dayOfWeek}`;
-
-  return `
-    <div class="gaba-item" data-id="${lesson.id}">
-      <div class="gaba-item-content">
-        <div class="gaba-item-main">
-          <div class="gaba-item-info-row">
-            <span class="gaba-item-date">${dateDisplay}</span>
-            <span class="gaba-item-time">${lesson.time}</span>
-            ${lesson.ls ? `<span class="gaba-item-ls">${lesson.ls}</span>` : ''}
-          </div>
-        </div>
-        <div class="gaba-item-actions">
-          <a href="${calendarLink}" target="_blank" class="gaba-calendar-btn google" title="Google Calendar">📅</a>
-          <button class="gaba-calendar-btn notion" data-lesson-id="${lesson.id}" title="Notionに追加">🔗</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// ── Attach Notion Button Listeners ──
-function attachGabaNotionListeners(container: HTMLElement, lessons: GabaLesson[]) {
-  const buttons = container.querySelectorAll<HTMLButtonElement>('.gaba-calendar-btn.notion');
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const lessonId = btn.dataset.lessonId;
-      const lesson = lessons.find((l) => l.id === lessonId);
-      if (lesson) {
-        await addGabaLessonToNotion(lesson);
-      }
-    });
-  });
-}
-
-// ── Add Gaba Lesson to Notion ──
-async function addGabaLessonToNotion(lesson: GabaLesson) {
-  const settings = await getSettings();
-  if (!settings.notionApiKey || !settings.gabaDatabaseId) {
-    showToast('Notion設定が未完了です', 'error');
-    return;
-  }
-
-  showToast('Notionに追加中...', 'success');
-
-  try {
-    const result = await chrome.runtime.sendMessage({
-      action: 'SAVE_GABA_LESSONS',
-      payload: { lessons: [lesson] },
-    });
-    if (result?.error) {
-      throw new Error(result.error);
+  xShowForYou?.addEventListener('click', async () => {
+    try {
+      const result = await xSendAction('X_SWITCH_TO_FOR_YOU');
+      showToast(result.data.message, result.data.success ? 'success' : 'error');
+      setTimeout(refreshXStatus, 500);
+    } catch (err: any) {
+      showToast(`エラー: ${err.message}`, 'error');
     }
-    showToast('Notionに追加しました ✓', 'success');
-  } catch (err: any) {
-    showToast(`エラー: ${err.message}`, 'error');
-  }
-}
+  });
 
-// ── Parse Gaba Date ──
-function parseGabaDate(dateText: string, timeText: string): Date {
-  const dateMatch = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-  const timeMatch = timeText.match(/(\d{1,2}):(\d{2})/);
+  xHideForYou?.addEventListener('click', async () => {
+    try {
+      const result = await xSendAction('X_HIDE_FOR_YOU');
+      showToast(result.data.message, result.data.success ? 'success' : 'error');
+      setTimeout(refreshXStatus, 500);
+    } catch (err: any) {
+      showToast(`エラー: ${err.message}`, 'error');
+    }
+  });
 
-  if (dateMatch && timeMatch) {
-    return new Date(
-      parseInt(dateMatch[1]),
-      parseInt(dateMatch[2]) - 1,
-      parseInt(dateMatch[3]),
-      parseInt(timeMatch[1]),
-      parseInt(timeMatch[2])
-    );
-  }
-  return new Date(0);
-}
-
-// ── Get Day of Week ──
-function getGabaDayOfWeek(dateText: string): string {
-  const dateMatch = dateText.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-  if (!dateMatch) return '';
-
-  const date = new Date(
-    parseInt(dateMatch[1]),
-    parseInt(dateMatch[2]) - 1,
-    parseInt(dateMatch[3])
-  );
-  const days = ['日', '月', '火', '水', '木', '金', '土'];
-  return days[date.getDay()];
-}
-
-// ── Generate Google Calendar Link ──
-function generateGoogleCalendarLink(lesson: GabaLesson): string {
-  const dateMatch = lesson.date.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
-  const timeMatch = lesson.time.match(/(\d{1,2}):(\d{2})/);
-  if (!dateMatch || !timeMatch) return '#';
-
-  const originalDate = new Date(
-    parseInt(dateMatch[1]),
-    parseInt(dateMatch[2]) - 1,
-    parseInt(dateMatch[3]),
-    parseInt(timeMatch[1]),
-    parseInt(timeMatch[2])
-  );
-
-  const startDate = new Date(originalDate.getTime() - CALENDAR_EVENT_PRE_OFFSET_MINUTES * 60 * 1000);
-  const endDate = new Date(originalDate.getTime() + CALENDAR_EVENT_POST_OFFSET_MINUTES * 60 * 1000);
-
-  const formatDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-
-  const title = encodeURIComponent(`【Gaba】レッスン（${lesson.time}）`);
-  const location = lesson.ls ? encodeURIComponent(lesson.ls) : '';
-
-  let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatDate(startDate)}/${formatDate(endDate)}`;
-  if (location) url += `&location=${location}`;
-
-  return url;
-}
-
-// ── Initialize Gaba Tab when switching to it ──
-function initGabaTab() {
-  if (currentHostname.includes('my.gaba.jp')) {
-    loadGabaReservations();
-    loadGabaCompletedLessons();
-  }
+  xRefresh?.addEventListener('click', () => refreshXStatus());
 }
 
 // ══════════════════════════════════════════════════════════

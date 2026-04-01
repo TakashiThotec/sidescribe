@@ -1,4 +1,4 @@
-import { Message, PageInfo, GabaLesson, SuicaTransaction, PageMemo, BankTransaction, CardBilling } from '../types';
+import { Message, PageInfo, SuicaTransaction, PageMemo, BankTransaction, CardBilling } from '../types';
 import { getSettings } from '../utils/storage';
 import { notion } from '../modules/notion';
 
@@ -47,24 +47,6 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
     case 'OPEN_OPTIONS':
       chrome.runtime.openOptionsPage();
       return { success: true };
-
-    // ── Gaba ──
-    case 'SAVE_GABA_LESSONS': {
-      const { lessons } = message.payload as { lessons: GabaLesson[] };
-      if (!settings.gabaDatabaseId) {
-        throw new Error('Gaba Database ID is not configured');
-      }
-      const results = [];
-      for (const lesson of lessons) {
-        const result = await notion.saveGabaLesson(
-          settings.gabaDatabaseId,
-          lesson,
-          settings.gabaDbMapping
-        );
-        results.push(result);
-      }
-      return { success: true, count: results.length };
-    }
 
     // ── Suica ──
     case 'SAVE_SUICA_TRANSACTIONS': {

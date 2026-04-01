@@ -13,13 +13,13 @@
   "host_permissions": [
     "https://api.notion.com/*",
     "https://www.netbk.co.jp/*",
-    "https://*.gabaonline.jp/*",
-    "https://my.gaba.jp/*",
     "https://*.jreast.co.jp/*",
     "https://www.mobilesuica.com/*",
     "https://global.americanexpress.com/*",
     "https://*.americanexpress.com/*",
-    "https://www.smbc-card.com/*"
+    "https://www.smbc-card.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*"
   ],
   "background": {
     "service_worker": "service-worker.js"
@@ -37,7 +37,9 @@
         "https://www.mobilesuica.com/*",
         "https://global.americanexpress.com/*",
         "https://*.americanexpress.com/*",
-        "https://www.smbc-card.com/*"
+        "https://www.smbc-card.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*"
       ],
       "js": ["content.js"]
     }
