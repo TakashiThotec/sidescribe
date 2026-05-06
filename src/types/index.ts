@@ -35,6 +35,17 @@ export interface SuicaDbMapping {
   balanceProperty: string;
 }
 
+export interface CalendarDbMapping {
+  titleProperty: string;
+  dateProperty: string;
+}
+
+export interface CalendarEvent {
+  title: string;
+  date: string;       // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD (multi-day events)
+}
+
 // ── Settings ──
 export interface SidescribeSettings {
   notionApiKey: string;
@@ -42,11 +53,13 @@ export interface SidescribeSettings {
   bankTransactionDatabaseId: string;
   cardStatementDatabaseId: string;
   suicaDatabaseId: string;
+  calendarDatabaseId: string;
   // Database property mappings
   memoDbMapping?: MemoDbMapping;
   bankDbMapping?: BankDbMapping;
   cardDbMapping?: CardDbMapping;
   suicaDbMapping?: SuicaDbMapping;
+  calendarDbMapping?: CalendarDbMapping;
 }
 
 export const DEFAULT_SETTINGS: SidescribeSettings = {
@@ -55,6 +68,7 @@ export const DEFAULT_SETTINGS: SidescribeSettings = {
   bankTransactionDatabaseId: '',
   cardStatementDatabaseId: '',
   suicaDatabaseId: '',
+  calendarDatabaseId: '',
 };
 
 // ── Memo ──
@@ -118,7 +132,7 @@ export interface CardBillingStock {
 }
 
 // ── Tab Type ──
-export type TabType = 'memo' | 'suica' | 'sbi' | 'card' | 'x';
+export type TabType = 'memo' | 'suica' | 'sbi' | 'card' | 'x' | 'ana';
 
 // ── Messages (background ↔ sidepanel ↔ content) ──
 export type MessageAction =
@@ -145,7 +159,9 @@ export type MessageAction =
   | 'X_GET_STATUS'
   | 'X_HIDE_FOR_YOU'
   | 'X_SWITCH_TO_FOR_YOU'
-  | 'X_SWITCH_TO_FOLLOWING';
+  | 'X_SWITCH_TO_FOLLOWING'
+  // Calendar
+  | 'GET_CALENDAR_EVENTS';
 
 export interface Message {
   action: MessageAction;

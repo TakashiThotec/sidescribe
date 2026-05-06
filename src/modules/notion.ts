@@ -1,4 +1,4 @@
-import { PageMemo, BankTransaction, CardStatement, SuicaTransaction, NotionDatabaseProperty, CardBilling } from '../types';
+import { PageMemo, BankTransaction, CardStatement, SuicaTransaction, NotionDatabaseProperty, CardBilling, CalendarEvent, CalendarDbMapping } from '../types';
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -351,6 +351,72 @@ class NotionClient {
         properties,
       }),
     });
+  }
+
+  // ── Get Calendar Events ──
+  async getCalendarEvents(
+    databaseId: string,
+    startDate: string,
+    endDate: string,
+    mapping: CalendarDbMapping
+  ): Promise<CalendarEvent[]> {
+    if (!mapping.dateProperty) {
+      throw new Error('Date property mapping is required');
+    }
+
+    // 期間と重なるイベントを取得（開始がendDate以前 AND 終了/開始がstartDate以降）
+    const filter = {
+      and: [
+        {
+          property: mapping.dateProperty,
+          date: { on_or_before: endDate },
+        },
+        {
+          property: mapping.dateProperty,
+          date: { on_or_after: startDate },
+        },
+      ],
+    };
+
+    const events: CalendarEvent[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const body: Record<string, unknown> = {
+        filter,
+        sorts: [{ property: mapping.dateProperty, direction: 'ascending' }],
+        page_size: 100,
+      };
+      if (cursor) body.start_cursor = cursor;
+
+      const response = await this.request(`/databases/${databaseId}/query`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      for (const page of response.results) {
+        const props = page.properties;
+        const dateProp = props[mapping.dateProperty]?.date;
+        if (!dateProp?.start) continue;
+
+        let title = '(無題)';
+        if (mapping.titleProperty && props[mapping.titleProperty]?.title) {
+          const titleArr = props[mapping.titleProperty].title;
+          const text = titleArr.map((t: { plain_text: string }) => t.plain_text).join('');
+          if (text) title = text;
+        }
+
+        events.push({
+          title,
+          date: dateProp.start.split('T')[0],
+          endDate: dateProp.end ? dateProp.end.split('T')[0] : undefined,
+        });
+      }
+
+      cursor = response.has_more ? response.next_cursor : undefined;
+    } while (cursor);
+
+    return events;
   }
 }
 

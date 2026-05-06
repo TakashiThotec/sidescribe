@@ -10,6 +10,7 @@ const notionApiKey = $<HTMLInputElement>('notion-api-key');
 const memoDbId = $<HTMLInputElement>('memo-db-id');
 const bankDbId = $<HTMLInputElement>('bank-db-id');
 const cardDbId = $<HTMLInputElement>('card-db-id');
+const calendarDbId = $<HTMLInputElement>('calendar-db-id');
 const saveStatus = $<HTMLSpanElement>('save-status');
 
 // ── DB Mapping configurations ──
@@ -57,6 +58,16 @@ const dbConfigs: Record<string, DbConfig> = {
       { selectId: 'card-map-amount', expectedType: 'number', fieldKey: 'amountProperty' },
       { selectId: 'card-map-cardname', expectedType: 'rich_text', fieldKey: 'cardNameProperty' },
       { selectId: 'card-map-category', expectedType: 'rich_text', fieldKey: 'categoryProperty' },
+    ],
+  },
+  calendar: {
+    inputId: 'calendar-db-id',
+    fetchBtnId: 'calendar-fetch-schema',
+    mappingPanelId: 'calendar-mapping',
+    mappingKey: 'calendarDbMapping',
+    mappingFields: [
+      { selectId: 'calendar-map-title', expectedType: 'title', fieldKey: 'titleProperty' },
+      { selectId: 'calendar-map-date', expectedType: 'date', fieldKey: 'dateProperty' },
     ],
   },
 };
@@ -205,6 +216,7 @@ async function loadSettings() {
   memoDbId.value = settings.memoDatabaseId;
   bankDbId.value = settings.bankTransactionDatabaseId;
   cardDbId.value = settings.cardStatementDatabaseId;
+  calendarDbId.value = settings.calendarDatabaseId;
   // Set API key for Notion client
   if (settings.notionApiKey) {
     notion.setApiKey(settings.notionApiKey);
@@ -215,6 +227,7 @@ async function loadSettings() {
     memo: settings.memoDbMapping as any,
     bank: settings.bankDbMapping as any,
     card: settings.cardDbMapping as any,
+    calendar: settings.calendarDbMapping as any,
   };
 
   console.log('[Sidescribe] Loaded mappings:', mappings);
@@ -255,6 +268,7 @@ form.addEventListener('submit', async (e) => {
     memoDatabaseId: memoDbId.value.trim(),
     bankTransactionDatabaseId: bankDbId.value.trim(),
     cardStatementDatabaseId: cardDbId.value.trim(),
+    calendarDatabaseId: calendarDbId.value.trim(),
   });
 
   showStatus('✓ 保存しました');

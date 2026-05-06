@@ -1700,3 +1700,210 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--c-text-3);
 }
+
+/* ══════════════════════════════════════════════════════════
+   ANA Calendar (Notion予定)
+   ══════════════════════════════════════════════════════════ */
+
+.ana-cal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 8px;
+}
+
+.ana-month-label {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.ana-nav-btn {
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--c-text);
+  transition: all var(--dur) var(--ease);
+}
+
+.ana-nav-btn:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+}
+
+.ana-status {
+  font-size: 11px;
+  color: var(--c-text-2);
+  padding: 4px 0 8px;
+  text-align: center;
+  min-height: 16px;
+}
+
+.ana-status.error { color: var(--c-error); }
+.ana-status.success { color: var(--c-success); }
+
+.ana-calendar {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 10px;
+  box-shadow: var(--shadow-xs);
+}
+
+.ana-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.ana-wd {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  padding: 4px 0;
+}
+
+.ana-wd.sun { color: #dc2626; }
+.ana-wd.sat { color: #2563eb; }
+
+.ana-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ana-day {
+  position: relative;
+  aspect-ratio: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.ana-day:hover:not(.empty) {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary);
+}
+
+.ana-day.empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.ana-day.sun { color: #dc2626; }
+.ana-day.sat { color: #2563eb; }
+
+.ana-day.today {
+  border-color: var(--c-primary);
+  font-weight: 700;
+}
+
+.ana-day.selected {
+  background: var(--c-primary);
+  color: #fff !important;
+  border-color: var(--c-primary);
+}
+
+.ana-day.has-event {
+  background: var(--c-primary-soft);
+}
+
+.ana-day.selected.has-event {
+  background: var(--c-primary);
+}
+
+.ana-day-num {
+  line-height: 1;
+}
+
+.ana-day-dots {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+  height: 4px;
+}
+
+.ana-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--c-primary);
+}
+
+.ana-day.selected .ana-dot {
+  background: #fff;
+}
+
+.ana-day-detail {
+  margin-top: 12px;
+}
+
+.ana-day-detail:empty {
+  display: none;
+}
+
+.ana-detail-date {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+  padding: 8px 12px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  border-bottom: none;
+}
+
+.ana-detail-empty {
+  font-size: 12px;
+  color: var(--c-text-3);
+  padding: 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  text-align: center;
+}
+
+.ana-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.ana-event-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--c-text);
+  border-top: 1px solid var(--c-border-light);
+  border-left: 3px solid var(--c-primary);
+}
+
+.ana-event-item:first-child {
+  border-top: none;
+}
+
+.ana-event-range {
+  color: var(--c-text-3);
+  font-size: 11px;
+}

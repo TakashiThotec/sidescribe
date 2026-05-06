@@ -1,5 +1,5 @@
 import './sidepanel.css';
-import { PageInfo, PageMemo, TabType, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock } from '../types';
+import { PageInfo, PageMemo, TabType, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock, CalendarEvent } from '../types';
 import { getSettings, isConfigured } from '../utils/storage';
 
 // ── DOM Elements ──
@@ -33,6 +33,7 @@ const TAB_CONFIGS: TabConfig[] = [
   { tab: 'sbi', hostnames: ['www.netbk.co.jp'] },
   { tab: 'card', hostnames: ['global.americanexpress.com', 'www.smbc-card.com'] },
   { tab: 'x', hostnames: ['x.com', 'twitter.com'] },
+  { tab: 'ana', hostnames: ['ana.co.jp'] },
 ];
 
 // ── Site-specific action definitions ──
@@ -248,6 +249,13 @@ async function init() {
     if (isXSite) {
       notConfigured.style.display = 'none';
       initXTab();
+    }
+
+    // ANAサイトの初期化（カレンダーを表示）
+    const isAnaSite = pageInfo.hostname.includes('ana.co.jp');
+    if (isAnaSite) {
+      notConfigured.style.display = 'none';
+      initAnaTab();
     }
   } catch (err) {
     pageHostname.textContent = 'ページ情報を取得できません';
@@ -1641,6 +1649,188 @@ async function batchAddCardBillingsToNotion() {
   } finally {
     updateBatchSection();
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// ANA Calendar Functions (Notion予定表示)
+// ══════════════════════════════════════════════════════════
+
+let anaViewYear = new Date().getFullYear();
+let anaViewMonth = new Date().getMonth();
+let anaInitialized = false;
+let anaEvents: CalendarEvent[] = [];
+let anaSelectedDateKey: string | null = null;
+
+function fmtDateKey(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function fmtDateDisplay(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const wd = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
+  return `${y}/${m}/${d} (${wd})`;
+}
+
+function getEventsForDate(key: string): CalendarEvent[] {
+  return anaEvents.filter((ev) => {
+    if (ev.endDate) {
+      return key >= ev.date && key <= ev.endDate;
+    }
+    return ev.date === key;
+  });
+}
+
+async function initAnaTab() {
+  if (!anaInitialized) {
+    anaInitialized = true;
+
+    document.getElementById('ana-prev')?.addEventListener('click', () => {
+      anaViewMonth--;
+      if (anaViewMonth < 0) {
+        anaViewMonth = 11;
+        anaViewYear--;
+      }
+      anaSelectedDateKey = null;
+      renderAnaCalendar();
+      loadAnaEvents();
+    });
+
+    document.getElementById('ana-next')?.addEventListener('click', () => {
+      anaViewMonth++;
+      if (anaViewMonth > 11) {
+        anaViewMonth = 0;
+        anaViewYear++;
+      }
+      anaSelectedDateKey = null;
+      renderAnaCalendar();
+      loadAnaEvents();
+    });
+
+    document.getElementById('ana-reload')?.addEventListener('click', () => loadAnaEvents());
+  }
+
+  renderAnaCalendar();
+  await loadAnaEvents();
+}
+
+function showAnaStatus(message: string, type: 'info' | 'error' | 'success' | '' = '') {
+  const el = document.getElementById('ana-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `ana-status ${type}`.trim();
+}
+
+async function loadAnaEvents() {
+  const startDate = fmtDateKey(anaViewYear, anaViewMonth, 1);
+  const lastDay = new Date(anaViewYear, anaViewMonth + 1, 0).getDate();
+  const endDate = fmtDateKey(anaViewYear, anaViewMonth, lastDay);
+
+  showAnaStatus('予定を取得中...', 'info');
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: 'GET_CALENDAR_EVENTS',
+      payload: { startDate, endDate },
+    });
+
+    if (result?.error) throw new Error(result.error);
+
+    anaEvents = result.data || [];
+    showAnaStatus(`${anaEvents.length}件の予定`, 'success');
+    renderAnaCalendar();
+    renderAnaDayDetail();
+  } catch (err: any) {
+    anaEvents = [];
+    const msg = err.message || '取得に失敗しました';
+    if (msg.includes('not configured')) {
+      showAnaStatus('Calendar Database を設定画面で設定してください', 'error');
+    } else {
+      showAnaStatus(`エラー: ${msg}`, 'error');
+    }
+    renderAnaCalendar();
+  }
+}
+
+function renderAnaCalendar() {
+  const grid = document.getElementById('ana-grid');
+  const label = document.getElementById('ana-month-label');
+  if (!grid || !label) return;
+
+  label.textContent = `${anaViewYear}年 ${anaViewMonth + 1}月`;
+
+  const firstDay = new Date(anaViewYear, anaViewMonth, 1);
+  const lastDay = new Date(anaViewYear, anaViewMonth + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startWeekday = firstDay.getDay();
+
+  const today = new Date();
+  const todayKey = fmtDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+  let html = '';
+  for (let i = 0; i < startWeekday; i++) {
+    html += '<span class="ana-day empty"></span>';
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = fmtDateKey(anaViewYear, anaViewMonth, d);
+    const wd = new Date(anaViewYear, anaViewMonth, d).getDay();
+    const classes = ['ana-day'];
+    if (wd === 0) classes.push('sun');
+    if (wd === 6) classes.push('sat');
+    if (key === todayKey) classes.push('today');
+    if (key === anaSelectedDateKey) classes.push('selected');
+
+    const events = getEventsForDate(key);
+    const hasEvent = events.length > 0;
+    if (hasEvent) classes.push('has-event');
+
+    const dotsHtml = hasEvent
+      ? `<span class="ana-day-dots">${events.slice(0, 3).map(() => '<span class="ana-dot"></span>').join('')}</span>`
+      : '';
+
+    html += `<button class="${classes.join(' ')}" data-key="${key}"><span class="ana-day-num">${d}</span>${dotsHtml}</button>`;
+  }
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll<HTMLButtonElement>('.ana-day:not(.empty)').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      if (!key) return;
+      anaSelectedDateKey = anaSelectedDateKey === key ? null : key;
+      renderAnaCalendar();
+      renderAnaDayDetail();
+    });
+  });
+}
+
+function renderAnaDayDetail() {
+  const el = document.getElementById('ana-day-detail');
+  if (!el) return;
+
+  if (!anaSelectedDateKey) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const events = getEventsForDate(anaSelectedDateKey);
+  const heading = `<div class="ana-detail-date">${fmtDateDisplay(anaSelectedDateKey)}</div>`;
+
+  if (events.length === 0) {
+    el.innerHTML = `${heading}<div class="ana-detail-empty">予定なし</div>`;
+    return;
+  }
+
+  const list = events
+    .map((ev) => {
+      const range = ev.endDate && ev.endDate !== ev.date ? ` <span class="ana-event-range">(${ev.date} 〜 ${ev.endDate})</span>` : '';
+      const escaped = ev.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<li class="ana-event-item">${escaped}${range}</li>`;
+    })
+    .join('');
+
+  el.innerHTML = `${heading}<ul class="ana-event-list">${list}</ul>`;
 }
 
 // ── Start ──

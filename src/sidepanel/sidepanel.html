@@ -31,6 +31,7 @@
       <button class="tab" data-tab="sbi" style="display:none">💰 SBI</button>
       <button class="tab" data-tab="card" style="display:none">💳 カード</button>
       <button class="tab" data-tab="x" style="display:none">𝕏</button>
+      <button class="tab" data-tab="ana" style="display:none">✈️ ANA</button>
     </div>
 
     <!-- Tab Content: Memo -->
@@ -271,6 +272,32 @@
           <summary>デバッグ情報</summary>
           <pre id="x-debug" class="x-debug"></pre>
         </details>
+      </section>
+    </div>
+
+    <!-- Tab Content: ANA Calendar -->
+    <div id="tab-ana" class="tab-content">
+      <section class="section">
+        <div class="ana-cal-header">
+          <button id="ana-prev" class="ana-nav-btn" title="前月">‹</button>
+          <span id="ana-month-label" class="ana-month-label"></span>
+          <button id="ana-next" class="ana-nav-btn" title="次月">›</button>
+          <button id="ana-reload" class="ana-nav-btn" title="再読込">⟳</button>
+        </div>
+        <div id="ana-status" class="ana-status"></div>
+        <div class="ana-calendar">
+          <div class="ana-weekdays">
+            <span class="ana-wd sun">日</span>
+            <span class="ana-wd">月</span>
+            <span class="ana-wd">火</span>
+            <span class="ana-wd">水</span>
+            <span class="ana-wd">木</span>
+            <span class="ana-wd">金</span>
+            <span class="ana-wd sat">土</span>
+          </div>
+          <div id="ana-grid" class="ana-grid"></div>
+        </div>
+        <div id="ana-day-detail" class="ana-day-detail"></div>
       </section>
     </div>
 

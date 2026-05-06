@@ -168,6 +168,23 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
       return { success: true, count: results.length };
     }
 
+    case 'GET_CALENDAR_EVENTS': {
+      const { startDate, endDate } = message.payload as { startDate: string; endDate: string };
+      if (!settings.calendarDatabaseId) {
+        throw new Error('Calendar Database ID is not configured');
+      }
+      if (!settings.calendarDbMapping?.dateProperty) {
+        throw new Error('Calendar Database date property mapping is not configured');
+      }
+      const events = await notion.getCalendarEvents(
+        settings.calendarDatabaseId,
+        startDate,
+        endDate,
+        settings.calendarDbMapping
+      );
+      return { success: true, data: events };
+    }
+
     default:
       return { error: `Unknown action: ${message.action}` };
   }
