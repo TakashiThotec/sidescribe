@@ -15,7 +15,7 @@
     "condition": {
       "requestDomains": ["tokyo-calendar-date.jp"],
       "resourceTypes": [
-        "main_frame", "sub_frame", "script", "xmlhttprequest", "fetch",
+        "main_frame", "sub_frame", "script", "xmlhttprequest",
         "stylesheet", "image", "font", "media", "ping", "websocket", "other"
       ]
     }
