@@ -53,6 +53,12 @@
         "https://twitter.com/*"
       ],
       "js": ["content.js"]
+    },
+    {
+      "matches": ["https://tokyo-calendar-date.jp/*"],
+      "js": ["mobile-emulation.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "options_page": "options.html",
