@@ -52,6 +52,7 @@ module.exports = (env, argv) => {
         patterns: [
           { from: 'manifest.json', to: 'manifest.json' },
           { from: 'icons', to: 'icons' },
+          { from: 'rules/mobile-ua-rules.json', to: 'mobile-ua-rules.json' },
         ],
       }),
     ],

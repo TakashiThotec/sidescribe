@@ -8,7 +8,8 @@
     "activeTab",
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "https://api.notion.com/*",
@@ -19,8 +20,18 @@
     "https://*.americanexpress.com/*",
     "https://www.smbc-card.com/*",
     "https://x.com/*",
-    "https://twitter.com/*"
+    "https://twitter.com/*",
+    "https://tokyo-calendar-date.jp/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "mobile-ua",
+        "enabled": true,
+        "path": "mobile-ua-rules.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "service-worker.js"
   },
