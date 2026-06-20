@@ -12,6 +12,7 @@ module.exports = (env, argv) => {
       'sidepanel': './src/sidepanel/sidepanel.ts',
       'options': './src/options/options.ts',
       'content': './src/content/content.ts',
+      'mobile-emulation': './src/content/mobile-emulation.ts',
     },
     output: {
       path: path.resolve(__dirname, 'dist'),
@@ -52,6 +53,7 @@ module.exports = (env, argv) => {
         patterns: [
           { from: 'manifest.json', to: 'manifest.json' },
           { from: 'icons', to: 'icons' },
+          { from: 'rules/mobile-ua-rules.json', to: 'mobile-ua-rules.json' },
         ],
       }),
     ],

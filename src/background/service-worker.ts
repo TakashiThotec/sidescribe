@@ -1,11 +1,15 @@
 import { Message, PageInfo, SuicaTransaction, PageMemo, BankTransaction, CardBilling } from '../types';
 import { getSettings } from '../utils/storage';
 import { notion } from '../modules/notion';
+import { registerMobileWindowListeners } from './mobile-window';
 
 // ── Side Panel をアイコンクリックで開く ──
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch(console.error);
+
+// ── スマホ表示 自動切替（対象ドメインのウィンドウリサイズ）──
+registerMobileWindowListeners();
 
 // ログを出さない非致命的エラー
 const SILENT_ERRORS = [
