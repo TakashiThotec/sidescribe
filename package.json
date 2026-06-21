@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node tests/hls-detector.test.cjs && node tests/hls-downloader.test.cjs && node tests/hls-sniffer.test.cjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

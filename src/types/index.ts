@@ -54,6 +54,7 @@ export interface SidescribeSettings {
   cardStatementDatabaseId: string;
   suicaDatabaseId: string;
   calendarDatabaseId: string;
+  hlsWhitelistPatterns: string[];
   // Database property mappings
   memoDbMapping?: MemoDbMapping;
   bankDbMapping?: BankDbMapping;
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: SidescribeSettings = {
   cardStatementDatabaseId: '',
   suicaDatabaseId: '',
   calendarDatabaseId: '',
+  hlsWhitelistPatterns: [],
 };
 
 // ── Memo ──
@@ -131,8 +133,22 @@ export interface CardBillingStock {
   lastUpdated: string;
 }
 
+// ── HLS Detection ──
+export interface DetectedHlsStream {
+  id: string;
+  url: string;
+  pageUrl: string;
+  pageTitle: string;
+  hostname: string;
+  tabId: number;
+  frameId: number;
+  frameUrl?: string;
+  initiator?: string;
+  detectedAt: number;
+}
+
 // ── Tab Type ──
-export type TabType = 'memo' | 'suica' | 'sbi' | 'card' | 'x' | 'ana';
+export type TabType = 'memo' | 'suica' | 'sbi' | 'card' | 'x' | 'ana' | 'video';
 
 // ── Messages (background ↔ sidepanel ↔ content) ──
 export type MessageAction =
@@ -155,6 +171,11 @@ export type MessageAction =
   | 'SAVE_CARD_BILLING'
   // Tab context
   | 'TAB_CONTEXT_CHANGED'
+  // HLS
+  | 'GET_DETECTED_HLS_STREAMS'
+  | 'CLEAR_DETECTED_HLS_STREAMS'
+  | 'DOWNLOAD_HLS_STREAM'
+  | 'HLS_DOWNLOAD_PROGRESS'
   // X/Twitter
   | 'X_GET_STATUS'
   | 'X_HIDE_FOR_YOU'

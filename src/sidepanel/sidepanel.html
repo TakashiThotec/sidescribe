@@ -32,6 +32,7 @@
       <button class="tab" data-tab="card" style="display:none">💳 カード</button>
       <button class="tab" data-tab="x" style="display:none">𝕏</button>
       <button class="tab" data-tab="ana" style="display:none">✈️ ANA</button>
+      <button class="tab" data-tab="video" style="display:none">🎬 動画</button>
     </div>
 
     <!-- Tab Content: Memo -->
@@ -298,6 +299,18 @@
           <div id="ana-grid" class="ana-grid"></div>
         </div>
         <div id="ana-day-detail" class="ana-day-detail"></div>
+      </section>
+    </div>
+
+    <!-- Tab Content: HLS Video -->
+    <div id="tab-video" class="tab-content">
+      <section class="section">
+        <div class="video-header">
+          <h2 class="section-title">検知したHLS動画</h2>
+          <button id="video-clear" class="btn btn-secondary">クリア</button>
+        </div>
+        <div id="video-status" class="video-status">検知状況を確認中...</div>
+        <div id="video-list" class="video-list"></div>
       </section>
     </div>
 

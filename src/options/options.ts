@@ -11,6 +11,7 @@ const memoDbId = $<HTMLInputElement>('memo-db-id');
 const bankDbId = $<HTMLInputElement>('bank-db-id');
 const cardDbId = $<HTMLInputElement>('card-db-id');
 const calendarDbId = $<HTMLInputElement>('calendar-db-id');
+const hlsWhitelistPatterns = $<HTMLTextAreaElement>('hls-whitelist-patterns');
 const saveStatus = $<HTMLSpanElement>('save-status');
 
 // ── DB Mapping configurations ──
@@ -191,6 +192,19 @@ function showStatus(message: string) {
   }, 2000);
 }
 
+async function requestHlsHostPermissionIfNeeded(patterns: string[]): Promise<boolean> {
+  if (patterns.length === 0) return true;
+
+  const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+  if (hasPermission) return true;
+
+  const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
+  if (!granted) {
+    showStatus('保存しました。HLS検知には追加権限の許可が必要です');
+  }
+  return granted;
+}
+
 // ── Setup fetch schema buttons ──
 function setupFetchSchemaButtons() {
   Object.entries(dbConfigs).forEach(([dbKey, config]) => {
@@ -217,6 +231,7 @@ async function loadSettings() {
   bankDbId.value = settings.bankTransactionDatabaseId;
   cardDbId.value = settings.cardStatementDatabaseId;
   calendarDbId.value = settings.calendarDatabaseId;
+  hlsWhitelistPatterns.value = (settings.hlsWhitelistPatterns || []).join('\n');
   // Set API key for Notion client
   if (settings.notionApiKey) {
     notion.setApiKey(settings.notionApiKey);
@@ -263,15 +278,23 @@ async function loadSettings() {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  const whitelistPatterns = hlsWhitelistPatterns.value
+    .split('\n')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean);
+
+  const hasHlsPermission = await requestHlsHostPermissionIfNeeded(whitelistPatterns);
+
   await saveSettings({
     notionApiKey: notionApiKey.value.trim(),
     memoDatabaseId: memoDbId.value.trim(),
     bankTransactionDatabaseId: bankDbId.value.trim(),
     cardStatementDatabaseId: cardDbId.value.trim(),
     calendarDatabaseId: calendarDbId.value.trim(),
+    hlsWhitelistPatterns: whitelistPatterns,
   });
 
-  showStatus('✓ 保存しました');
+  showStatus(hasHlsPermission ? '✓ 保存しました' : '保存しました。HLS検知には追加権限の許可が必要です');
 });
 
 // ── Initialize ──

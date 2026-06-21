@@ -1,6 +1,8 @@
 import './sidepanel.css';
-import { PageInfo, PageMemo, TabType, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock, CalendarEvent } from '../types';
+import { PageInfo, PageMemo, TabType, SuicaTransaction, BankTransaction, CardBilling, CardBillingGroup, CardBillingStock, CalendarEvent, DetectedHlsStream } from '../types';
 import { getSettings, isConfigured } from '../utils/storage';
+import { classifyPlaylistSupport, createDownloadFilename, describeHlsUrlExpiry, parseEncryptionKey, parseSegmentUrls, selectBestVariantPlaylist } from '../modules/hls-downloader';
+import { classifyHlsDeliveryMode } from '../modules/hls-sniffer';
 
 // ── DOM Elements ──
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -16,6 +18,9 @@ const linkSettings = $<HTMLAnchorElement>('link-settings');
 const siteActions = $<HTMLElement>('site-actions');
 const siteActionsContent = $<HTMLDivElement>('site-actions-content');
 const toast = $<HTMLDivElement>('toast');
+const videoStatus = $<HTMLDivElement>('video-status');
+const videoList = $<HTMLDivElement>('video-list');
+const videoClear = $<HTMLButtonElement>('video-clear');
 
 // Tab elements
 const tabBar = $<HTMLDivElement>('tab-bar');
@@ -35,6 +40,8 @@ const TAB_CONFIGS: TabConfig[] = [
   { tab: 'x', hostnames: ['x.com', 'twitter.com'] },
   { tab: 'ana', hostnames: ['ana.co.jp'] },
 ];
+
+let videoInitialized = false;
 
 // ── Site-specific action definitions ──
 interface SiteAction {
@@ -97,6 +104,10 @@ const xDebug = $<HTMLPreElement>('x-debug');
 
 // ── Current State ──
 let currentHostname = '';
+let currentDetectedHlsStreams: DetectedHlsStream[] = [];
+let downloadingHlsId: string | null = null;
+let hlsDownloadStatusById: Map<string, string> = new Map();
+let hlsSupportById: Map<string, { status: 'checking' | 'supported' | 'unsupported' | 'capture'; reason: string; segmentCount?: number }> = new Map();
 let suicaTransactions: SuicaTransaction[] = [];
 let suicaFilteredTransactions: SuicaTransaction[] = [];
 let suicaSettings = {
@@ -135,6 +146,101 @@ async function ensureContentScript(tabId: number): Promise<void> {
   }
 }
 
+async function ensureContentScriptInFrame(tabId: number, frameId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, { action: 'PING' }, { frameId });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      files: ['content.js'],
+    });
+  }
+}
+
+interface HlsSnifferStatus {
+  installed: boolean;
+  total: number;
+  captured: number;
+  ready: boolean;
+  hasPlaylist: boolean;
+  hasEndList: boolean;
+}
+
+async function ensureHlsSniffer(tabId: number, frameId: number): Promise<void> {
+  const [check] = await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    world: 'MAIN',
+    func: () => !!(globalThis as { __SIDESCRIBE_HLS_SNIFFER__?: { installed?: boolean } }).__SIDESCRIBE_HLS_SNIFFER__?.installed,
+  });
+  if (check?.result) return;
+
+  await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    world: 'MAIN',
+    files: ['hls-sniffer-main.js'],
+  });
+}
+
+async function armHlsSniffer(stream: DetectedHlsStream): Promise<void> {
+  await chrome.scripting.executeScript({
+    target: { tabId: stream.tabId, frameIds: [stream.frameId] },
+    world: 'MAIN',
+    func: (streamUrl: string, streamId: string) => {
+      window.postMessage({ source: 'SIDESCRIBE_HLS_SNIFFER_ARM', streamUrl, streamId }, '*');
+    },
+    args: [stream.url, stream.id],
+  });
+}
+
+async function getHlsSnifferStatus(stream: DetectedHlsStream): Promise<HlsSnifferStatus> {
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId: stream.tabId, frameIds: [stream.frameId] },
+    world: 'MAIN',
+    func: (streamUrl: string) => {
+      const api = (globalThis as { __SIDESCRIBE_HLS_SNIFFER__?: { getStatus?: (url: string) => HlsSnifferStatus } }).__SIDESCRIBE_HLS_SNIFFER__;
+      return api?.getStatus?.(streamUrl) || {
+        installed: false,
+        total: 0,
+        captured: 0,
+        ready: false,
+        hasPlaylist: false,
+        hasEndList: false,
+      };
+    },
+    args: [stream.url],
+  });
+
+  return (execution?.result as HlsSnifferStatus) || {
+    installed: false,
+    total: 0,
+    captured: 0,
+    ready: false,
+    hasPlaylist: false,
+    hasEndList: false,
+  };
+}
+
+function describeCaptureSupportReason(status: HlsSnifferStatus): string {
+  if (status.ready) return `キャプチャ完了 (${status.captured}/${status.total})`;
+  if (status.total > 0) return `再生キャプチャ (${status.captured}/${status.total})`;
+  return '再生キャプチャ（動画を再生してください）';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function applyCaptureSupportStatus(stream: DetectedHlsStream): Promise<void> {
+  await ensureHlsSniffer(stream.tabId, stream.frameId);
+  await armHlsSniffer(stream);
+  const status = await getHlsSnifferStatus(stream);
+  hlsSupportById.set(stream.id, {
+    status: 'capture',
+    reason: describeCaptureSupportReason(status),
+    segmentCount: status.total || undefined,
+  });
+}
+
 async function sendMessageToTab<T>(tabId: number, message: any): Promise<T> {
   await ensureContentScript(tabId);
   return chrome.tabs.sendMessage(tabId, message);
@@ -162,7 +268,7 @@ function showTab(tabName: TabType) {
   });
 }
 
-function updateTabVisibility(hostname: string) {
+function updateTabVisibility(hostname: string, hasVideo = false) {
   const activeTab = getTabForHostname(hostname);
 
   // Show/hide tab buttons based on current site
@@ -170,6 +276,8 @@ function updateTabVisibility(hostname: string) {
     const tabName = btn.dataset.tab as TabType;
     if (tabName === 'memo') {
       // メモタブは常に表示
+      btn.style.display = '';
+    } else if (tabName === 'video' && hasVideo) {
       btn.style.display = '';
     } else if (tabName === activeTab) {
       // 該当サイトのタブを表示
@@ -181,7 +289,7 @@ function updateTabVisibility(hostname: string) {
   });
 
   // 該当サイトならそのタブを選択、そうでなければメモタブ
-  showTab(activeTab || 'memo');
+  showTab(activeTab || (hasVideo ? 'video' : 'memo'));
 }
 
 // ── Tab Click Handler ──
@@ -204,8 +312,10 @@ async function init() {
     memoTitle.value = pageInfo.title;
     memoUrl.value = pageInfo.url;
 
+    currentDetectedHlsStreams = await loadDetectedHlsStreams();
+
     // タブの表示/選択を更新
-    updateTabVisibility(pageInfo.hostname);
+    updateTabVisibility(pageInfo.hostname, currentDetectedHlsStreams.length > 0);
 
     // サイト固有アクションの表示（タブがないサイト用）
     showSiteActions(pageInfo.hostname);
@@ -346,6 +456,585 @@ function attachSettingsLink() {
   });
 }
 
+// ── HLS Video Detection ──
+async function loadDetectedHlsStreams(): Promise<DetectedHlsStream[]> {
+  initVideoTab();
+
+  try {
+    const result = await chrome.runtime.sendMessage({ action: 'GET_DETECTED_HLS_STREAMS' });
+    if (result?.error) throw new Error(result.error);
+
+    const streams = (result.data || []) as DetectedHlsStream[];
+    for (const stream of streams) {
+      void ensureHlsSniffer(stream.tabId, stream.frameId);
+    }
+    renderDetectedHlsStreams(streams);
+    return streams;
+  } catch (err: any) {
+    if (videoStatus) {
+      videoStatus.textContent = `検知情報を取得できませんでした: ${err.message}`;
+      videoStatus.className = 'video-status error';
+    }
+    if (videoList) videoList.innerHTML = '';
+    return [];
+  }
+}
+
+function initVideoTab() {
+  if (videoInitialized) return;
+  videoInitialized = true;
+
+  videoClear?.addEventListener('click', async () => {
+    try {
+      await chrome.runtime.sendMessage({ action: 'CLEAR_DETECTED_HLS_STREAMS' });
+      currentDetectedHlsStreams = [];
+      renderDetectedHlsStreams([]);
+      updateTabVisibility(currentHostname, false);
+      showToast('動画検知リストをクリアしました', 'success');
+    } catch (err: any) {
+      showToast(`クリアできませんでした: ${err.message}`, 'error');
+    }
+  });
+}
+
+function renderDetectedHlsStreams(streams: DetectedHlsStream[]) {
+  if (!videoStatus || !videoList) return;
+
+  if (streams.length === 0) {
+    videoStatus.textContent = 'このタブではHLS動画をまだ検知していません。';
+    videoStatus.className = 'video-status';
+    videoList.innerHTML = `
+      <div class="video-empty">
+        対象ページを再生すると .m3u8 を検知してここに表示します。検知対象ページは設定画面のホワイトリストで管理できます。
+      </div>
+    `;
+    return;
+  }
+
+  videoStatus.textContent = `${streams.length}件のHLSソースを検知しました`;
+  videoStatus.className = 'video-status success';
+  videoList.innerHTML = streams.map((stream, index) => {
+    const support = hlsSupportById.get(stream.id);
+    const expiryInfo = describeHlsUrlExpiry(stream.url);
+    const isCaptureMode = support?.status === 'capture' || classifyHlsDeliveryMode(stream.url) === 'capture-preferred';
+    const canDownload = (support?.status === 'supported' || isCaptureMode) && !downloadingHlsId;
+    const isChecking = support?.status === 'checking';
+    const supportLabel = support
+      ? `${support.reason}${support.segmentCount != null ? ` (${support.segmentCount} segments)` : ''}`
+      : '未チェック';
+    const detectedAt = new Date(stream.detectedAt).toLocaleString('ja-JP', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    return `
+      <div class="video-item" data-stream-id="${escapeHtml(stream.id)}">
+        <div class="video-item-header">
+          <span class="video-index">#${index + 1}</span>
+          <span class="video-host">${escapeHtml(stream.hostname)} / frame ${stream.frameId}</span>
+        </div>
+        <div class="video-title-row">
+          <div class="video-title">${escapeHtml(stream.pageTitle || 'Untitled page')}</div>
+          <button class="video-copy" data-video-url="${escapeHtml(stream.url)}">URLコピー</button>
+        </div>
+        <div class="video-actions">
+          <button class="video-download${isCaptureMode ? ' capture-mode' : ''}" data-stream-id="${escapeHtml(stream.id)}" ${canDownload || downloadingHlsId === stream.id ? '' : 'disabled'}>
+            ${downloadingHlsId === stream.id ? 'DL中...' : isCaptureMode ? 'キャプチャDL' : 'DL (.ts)'}
+          </button>
+          <button class="video-check" data-stream-id="${escapeHtml(stream.id)}" ${isChecking || !!downloadingHlsId ? 'disabled' : ''}>
+            ${isChecking ? '確認中...' : '再チェック'}
+          </button>
+          <span class="video-download-status">${escapeHtml(hlsDownloadStatusById.get(stream.id) || '')}</span>
+        </div>
+        <div class="video-access ${expiryInfo.state}">${escapeHtml(expiryInfo.label)}</div>
+        <div class="video-support ${support?.status || 'unknown'}">${escapeHtml(supportLabel)}</div>
+        <div class="video-note">${isCaptureMode
+          ? '403配信は再生中のセグメントをキャプチャして保存します。最初から最後まで再生してください。'
+          : 'MVPでは .ts として保存します。AES-128は通常取得できる鍵のみ対応、MP4変換は次段階です。'}</div>
+        <div class="video-debug">
+          frameUrl: ${escapeHtml(stream.frameUrl || 'unknown')}<br>
+          initiator: ${escapeHtml(stream.initiator || 'unknown')}
+        </div>
+        <div class="video-meta">検知: ${escapeHtml(detectedAt)}</div>
+      </div>
+    `;
+  }).join('');
+
+  attachVideoCopyListeners();
+  attachVideoDownloadListeners();
+  attachVideoCheckListeners();
+  ensureHlsSupportChecks(streams);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function attachVideoCopyListeners() {
+  videoList?.querySelectorAll<HTMLButtonElement>('.video-copy').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const url = button.dataset.videoUrl;
+      if (!url) return;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        button.textContent = 'コピー済み';
+        setTimeout(() => {
+          button.textContent = 'コピー';
+        }, 1500);
+      } catch {
+        showToast('コピーできませんでした', 'error');
+      }
+    });
+  });
+}
+
+function attachVideoDownloadListeners() {
+  videoList?.querySelectorAll<HTMLButtonElement>('.video-download').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const streamId = button.dataset.streamId;
+      const stream = currentDetectedHlsStreams.find((item) => item.id === streamId);
+      if (!stream) return;
+      await downloadHlsStream(stream);
+    });
+  });
+}
+
+function attachVideoCheckListeners() {
+  videoList?.querySelectorAll<HTMLButtonElement>('.video-check').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const streamId = button.dataset.streamId;
+      const stream = currentDetectedHlsStreams.find((item) => item.id === streamId);
+      if (!stream) return;
+      hlsSupportById.delete(stream.id);
+      await checkHlsSupport(stream);
+    });
+  });
+}
+
+function ensureHlsSupportChecks(streams: DetectedHlsStream[]) {
+  streams.forEach((stream) => {
+    if (!hlsSupportById.has(stream.id)) {
+      void checkHlsSupport(stream);
+    }
+  });
+}
+
+async function checkHlsSupport(stream: DetectedHlsStream) {
+  hlsSupportById.set(stream.id, { status: 'checking', reason: 'DL可否チェック中...' });
+  renderDetectedHlsStreams(currentDetectedHlsStreams);
+
+  try {
+    const expiryInfo = describeHlsUrlExpiry(stream.url);
+    if (expiryInfo.state === 'expired') {
+      throw new Error(`${expiryInfo.label}。動画を再生し直して新しいURLを検知してください`);
+    }
+
+    if (classifyHlsDeliveryMode(stream.url) === 'capture-preferred') {
+      await applyCaptureSupportStatus(stream);
+      renderDetectedHlsStreams(currentDetectedHlsStreams);
+      return;
+    }
+
+    let playlistUrl = stream.url;
+    let playlistText = await fetchHlsTextForSupportCheck(playlistUrl);
+    const variantUrl = selectBestVariantPlaylist(playlistText, playlistUrl);
+
+    if (variantUrl) {
+      playlistUrl = variantUrl;
+      playlistText = await fetchHlsTextForSupportCheck(playlistUrl);
+    }
+
+    const support = classifyPlaylistSupport(playlistText, playlistUrl);
+    if (support.supported && support.encrypted) {
+      const key = parseEncryptionKey(playlistText, playlistUrl);
+      if (!key) throw new Error('AES-128鍵情報を解析できません');
+      await fetchHlsBinaryForSupportCheck(key.uri);
+    }
+
+    hlsSupportById.set(stream.id, {
+      status: support.supported ? 'supported' : 'unsupported',
+      reason: support.reason,
+      segmentCount: support.segmentCount,
+    });
+  } catch (err: any) {
+    const reason = err.message === 'Failed to fetch'
+      ? 'ブラウザfetch不可 (CORS/認証/配信制限)'
+      : err.message;
+
+    if (reason.includes('HTTP 403')) {
+      await applyCaptureSupportStatus(stream);
+    } else {
+      hlsSupportById.set(stream.id, { status: 'unsupported', reason });
+    }
+  }
+
+  renderDetectedHlsStreams(currentDetectedHlsStreams);
+}
+
+async function fetchHlsTextForSupportCheck(url: string): Promise<string> {
+  const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
+  if (!response.ok) throw new Error(formatHlsHttpError(response.status));
+  return response.text();
+}
+
+async function fetchHlsBinaryForSupportCheck(url: string): Promise<ArrayBuffer> {
+  const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
+  if (!response.ok) throw new Error(`鍵取得失敗: ${formatHlsHttpError(response.status)}`);
+  return response.arrayBuffer();
+}
+
+function formatHlsHttpError(status: number): string {
+  if (status === 403) {
+    return 'HTTP 403: 配信サーバーが直接取得を拒否';
+  }
+
+  if (status === 401) {
+    return 'HTTP 401: 認証が必要です。ページへログインし直してから再生してください';
+  }
+
+  if (status === 404) {
+    return 'HTTP 404: 動画URLが無効です。再生し直して新しいURLを検知してください';
+  }
+
+  return `HTTP ${status}`;
+}
+
+async function downloadHlsStream(stream: DetectedHlsStream) {
+  if (downloadingHlsId) return;
+
+  downloadingHlsId = stream.id;
+
+  try {
+    const expiryInfo = describeHlsUrlExpiry(stream.url);
+    if (expiryInfo.state === 'expired') {
+      throw new Error(`${expiryInfo.label}。動画を再生し直して新しいURLを検知してください`);
+    }
+
+    const support = hlsSupportById.get(stream.id);
+    const useCapture = support?.status === 'capture' || classifyHlsDeliveryMode(stream.url) === 'capture-preferred';
+
+    if (useCapture) {
+      await downloadHlsViaCapture(stream);
+      return;
+    }
+
+    setHlsDownloadStatus(stream.id, 'ページMAIN worldでDL中...');
+    await downloadHlsDirect(stream);
+  } catch (err: any) {
+    if (shouldFallbackToCapture(err)) {
+      try {
+        await downloadHlsViaCapture(stream);
+        return;
+      } catch (captureErr: any) {
+        setHlsDownloadStatus(stream.id, `エラー: ${captureErr.message}`);
+        showToast(`DLエラー: ${captureErr.message}`, 'error');
+        return;
+      }
+    }
+
+    setHlsDownloadStatus(stream.id, `エラー: ${err.message}`);
+    showToast(`DLエラー: ${err.message}`, 'error');
+  } finally {
+    downloadingHlsId = null;
+    renderDetectedHlsStreams(currentDetectedHlsStreams);
+  }
+}
+
+function shouldFallbackToCapture(err: Error): boolean {
+  const message = err.message || '';
+  return message.includes('HTTP 403') || message.includes('直接取得を拒否');
+}
+
+async function downloadHlsDirect(stream: DetectedHlsStream) {
+  await ensureContentScriptInFrame(stream.tabId, stream.frameId);
+
+  const [execution] = await chrome.scripting.executeScript({
+    target: { tabId: stream.tabId, frameIds: [stream.frameId] },
+    world: 'MAIN',
+    func: downloadHlsInMainWorld,
+    args: [{ streamId: stream.id, url: stream.url, pageTitle: stream.pageTitle }],
+  });
+
+  const result = execution?.result as { success: boolean; error?: string; filename?: string } | undefined;
+  if (!result?.success) {
+    throw new Error(result?.error || 'ページMAIN worldでのDLに失敗しました');
+  }
+
+  setHlsDownloadStatus(stream.id, `保存を開始しました: ${result.filename || 'video.ts'}`);
+}
+
+async function downloadHlsViaCapture(stream: DetectedHlsStream) {
+  await ensureContentScriptInFrame(stream.tabId, stream.frameId);
+  await ensureHlsSniffer(stream.tabId, stream.frameId);
+  await armHlsSniffer(stream);
+
+  const maxWaitMs = 45 * 60 * 1000;
+  const pollMs = 1500;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    const status = await getHlsSnifferStatus(stream);
+
+    hlsSupportById.set(stream.id, {
+      status: 'capture',
+      reason: describeCaptureSupportReason(status),
+      segmentCount: status.total || undefined,
+    });
+
+    if (status.ready) {
+      setHlsDownloadStatus(stream.id, 'キャプチャ完了。結合中...');
+      const [execution] = await chrome.scripting.executeScript({
+        target: { tabId: stream.tabId, frameIds: [stream.frameId] },
+        world: 'MAIN',
+        func: (input: { streamUrl: string; pageTitle: string; streamId: string }) => {
+          const api = (globalThis as {
+            __SIDESCRIBE_HLS_SNIFFER__?: {
+              exportDownload?: (payload: { streamUrl: string; pageTitle: string; streamId: string }) => Promise<{ success: boolean; error?: string; filename?: string }>;
+            };
+          }).__SIDESCRIBE_HLS_SNIFFER__;
+          return api?.exportDownload?.(input);
+        },
+        args: [{ streamUrl: stream.url, pageTitle: stream.pageTitle, streamId: stream.id }],
+      });
+
+      const result = execution?.result as { success: boolean; error?: string; filename?: string } | undefined;
+      if (!result?.success) {
+        throw new Error(result?.error || 'キャプチャDLに失敗しました');
+      }
+
+      setHlsDownloadStatus(stream.id, `保存を開始しました: ${result.filename || 'video.ts'}`);
+      showToast(`保存を開始しました: ${result.filename || 'video.ts'}`, 'success');
+      return;
+    }
+
+    if (status.total === 0) {
+      setHlsDownloadStatus(stream.id, '動画を再生してください（最初から最後まで）');
+    } else {
+      setHlsDownloadStatus(stream.id, `キャプチャ中: ${status.captured}/${status.total} — 再生を続けてください`);
+    }
+
+    renderDetectedHlsStreams(currentDetectedHlsStreams);
+    await sleep(pollMs);
+  }
+
+  throw new Error('キャプチャタイムアウト。動画を最初から再生してから再試行してください');
+}
+
+async function downloadHlsInMainWorld(input: { streamId: string; url: string; pageTitle: string }) {
+  try {
+    const emitProgress = (status: string) => {
+      window.postMessage({
+        source: 'SIDESCRIBE_HLS_PROGRESS',
+        streamId: input.streamId,
+        status,
+      }, '*');
+    };
+
+    const getContentLines = (text: string) => text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const resolveHlsUrl = (url: string, baseUrl: string) => new URL(url, baseUrl).toString();
+
+    const selectBestVariant = (playlistText: string, playlistUrl: string): string | null => {
+      const lines = getContentLines(playlistText);
+      let bestBandwidth = -1;
+      let bestUrl: string | null = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.startsWith('#EXT-X-STREAM-INF')) continue;
+
+        const nextLine = lines[i + 1];
+        if (!nextLine || nextLine.startsWith('#')) continue;
+
+        const match = line.match(/BANDWIDTH=(\d+)/i);
+        const bandwidth = match ? Number(match[1]) : 0;
+        if (bandwidth > bestBandwidth) {
+          bestBandwidth = bandwidth;
+          bestUrl = resolveHlsUrl(nextLine, playlistUrl);
+        }
+      }
+
+      return bestUrl;
+    };
+
+    const parseSegments = (playlistText: string, playlistUrl: string) => getContentLines(playlistText)
+      .filter((line) => !line.startsWith('#'))
+      .map((line) => resolveHlsUrl(line, playlistUrl));
+
+    const parseAttribute = (line: string, name: string) => {
+      const match = line.match(new RegExp(`${name}=("[^"]+"|[^,]+)`, 'i'));
+      return match ? match[1].replace(/^"|"$/g, '') : null;
+    };
+
+    const parseMediaSequence = (playlistText: string) => {
+      const line = getContentLines(playlistText).find((item) => item.startsWith('#EXT-X-MEDIA-SEQUENCE'));
+      const value = line?.split(':')[1];
+      const parsed = value ? Number(value) : 0;
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const parseEncryptionKey = (playlistText: string, playlistUrl: string) => {
+      const keyLine = getContentLines(playlistText).find((line) => line.startsWith('#EXT-X-KEY'));
+      if (!keyLine || !keyLine.includes('METHOD=AES-128')) return null;
+
+      const uri = parseAttribute(keyLine, 'URI');
+      if (!uri) throw new Error('AES-128鍵URLが見つかりません');
+
+      const iv = parseAttribute(keyLine, 'IV');
+      return {
+        uri: resolveHlsUrl(uri, playlistUrl),
+        ivHex: iv ? iv.replace(/^0x/i, '').padStart(32, '0') : undefined,
+        mediaSequence: parseMediaSequence(playlistText),
+      };
+    };
+
+    const hexToBytes = (hex: string) => {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return bytes;
+    };
+
+    const getSegmentIv = (key: { ivHex?: string; mediaSequence: number }, segmentIndex: number) => {
+      const ivHex = key.ivHex || (key.mediaSequence + segmentIndex).toString(16).padStart(32, '0');
+      return hexToBytes(ivHex);
+    };
+
+    const createFilename = (pageTitle: string) => {
+      const sanitized = pageTitle
+        .replace(/[\\/:*?"<>|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120);
+      return `${sanitized || 'sidescribe-video'}.ts`;
+    };
+
+    const formatHttpError = (status: number) => {
+      if (status === 403) {
+        return 'HTTP 403: 配信サーバーが取得を拒否しました。再生し直して新しいURLを検知してください。再チェック後も403なら、この配信はDL対象外です';
+      }
+      if (status === 401) return 'HTTP 401: 認証が必要です';
+      if (status === 404) return 'HTTP 404: 動画URLが無効です';
+      return `HTTP ${status}`;
+    };
+
+    const fetchText = async (url: string) => {
+      emitProgress('m3u8取得中...');
+      const response = await window.fetch(url, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`取得失敗: ${formatHttpError(response.status)}`);
+      return response.text();
+    };
+
+    const fetchBinary = async (url: string) => {
+      const response = await window.fetch(url, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`取得失敗: ${formatHttpError(response.status)}`);
+      return response.arrayBuffer();
+    };
+
+    let playlistUrl = input.url;
+    let playlistText = await fetchText(playlistUrl);
+    const variantUrl = selectBestVariant(playlistText, playlistUrl);
+
+    if (variantUrl) {
+      playlistUrl = variantUrl;
+      emitProgress('最高画質プレイリスト取得中...');
+      playlistText = await fetchText(playlistUrl);
+    }
+
+    const segmentUrls = parseSegments(playlistText, playlistUrl);
+    if (segmentUrls.length === 0) throw new Error('動画セグメントが見つかりませんでした');
+
+    const encryptionKey = parseEncryptionKey(playlistText, playlistUrl);
+    let cryptoKey: CryptoKey | null = null;
+    if (encryptionKey) {
+      emitProgress('AES-128鍵取得中...');
+      const rawKey = await fetchBinary(encryptionKey.uri);
+      if (rawKey.byteLength !== 16) {
+        throw new Error(`AES-128鍵長が不正です: ${rawKey.byteLength} bytes`);
+      }
+      emitProgress('AES-128鍵をインポート中...');
+      cryptoKey = await window.crypto.subtle.importKey('raw', rawKey, { name: 'AES-CBC' }, false, ['decrypt']);
+    }
+
+    const results = new Array<ArrayBuffer>(segmentUrls.length);
+    let nextIndex = 0;
+    let done = 0;
+    const workerCount = Math.min(4, segmentUrls.length);
+    emitProgress(`セグメントDL開始: 0/${segmentUrls.length}`);
+
+    const worker = async () => {
+      while (nextIndex < segmentUrls.length) {
+        const currentIndex = nextIndex;
+        nextIndex++;
+
+        const segmentData = await fetchBinary(segmentUrls[currentIndex]);
+        if (cryptoKey && encryptionKey) {
+          emitProgress(`復号中: ${currentIndex + 1}/${segmentUrls.length}`);
+          results[currentIndex] = await window.crypto.subtle.decrypt(
+            { name: 'AES-CBC', iv: getSegmentIv(encryptionKey, currentIndex) },
+            cryptoKey,
+            segmentData
+          );
+        } else {
+          results[currentIndex] = segmentData;
+        }
+        done++;
+        emitProgress(`セグメントDL中: ${done}/${segmentUrls.length}`);
+      }
+    };
+
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    const filename = createFilename(input.pageTitle);
+    emitProgress('結合中...');
+    const blob = new Blob(results, { type: 'video/mp2t' });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    emitProgress(`保存を開始しました: ${filename}`);
+
+    return { success: true, filename };
+  } catch (err: any) {
+    const message = err.message || String(err);
+    return {
+      success: false,
+      error: message === 'Failed to fetch'
+        ? 'MAIN world fetch blocked (CORS/credentials/referrer mismatch)'
+        : message,
+    };
+  }
+}
+
+function setHlsDownloadStatus(streamId: string, status: string) {
+  hlsDownloadStatusById.set(streamId, status);
+  renderDetectedHlsStreams(currentDetectedHlsStreams);
+}
+
 // ── Toast ──
 function showToast(message: string, type: 'success' | 'error') {
   toast.textContent = message;
@@ -371,7 +1060,34 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'sync') {
     init();
+  } else if (areaName === 'session' && Object.keys(changes).some((key) => key.startsWith('hlsDetectedStreams:'))) {
+    loadDetectedHlsStreams().then((streams) => {
+      currentDetectedHlsStreams = streams;
+      updateTabVisibility(currentHostname, streams.length > 0);
+    });
   }
+});
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action !== 'HLS_DOWNLOAD_PROGRESS') return;
+
+  const payload = message.payload as { streamId?: string; status?: string };
+  if (!payload.streamId || !payload.status) return;
+
+  setHlsDownloadStatus(payload.streamId, payload.status);
+
+  const stream = currentDetectedHlsStreams.find((item) => item.id === payload.streamId);
+  if (!stream || hlsSupportById.get(stream.id)?.status !== 'capture') return;
+
+  const match = payload.status.match(/キャプチャ:\s*(\d+)\/(\d+)/);
+  if (!match) return;
+
+  hlsSupportById.set(stream.id, {
+    status: 'capture',
+    reason: `再生キャプチャ (${match[1]}/${match[2]})`,
+    segmentCount: Number(match[2]) || undefined,
+  });
+  renderDetectedHlsStreams(currentDetectedHlsStreams);
 });
 
 // ══════════════════════════════════════════════════════════

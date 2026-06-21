@@ -104,7 +104,8 @@ legend {
   margin-bottom: 6px;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--c-border);
@@ -116,7 +117,13 @@ legend {
   color: var(--c-text);
 }
 
-.field input:focus {
+.field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
   outline: none;
   border-color: var(--c-primary);
   background: var(--c-surface);

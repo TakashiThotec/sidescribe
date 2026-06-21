@@ -1,4 +1,5 @@
 import { Message, SuicaTransaction, BankTransaction, CardBilling } from '../types';
+import { createDownloadFilename, parseSegmentUrls, selectBestVariantPlaylist } from '../modules/hls-downloader';
 
 // ── X/Twitter: タブ操作 ──
 const isXSite = window.location.hostname === 'x.com' || window.location.hostname === 'twitter.com';
@@ -156,6 +157,12 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       sendResponse(getCardBilling());
       break;
 
+    case 'DOWNLOAD_HLS_STREAM':
+      downloadHlsFromPage(message.payload as { streamId: string; url: string; pageTitle: string })
+        .then(sendResponse)
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
+
     // X/Twitter
     case 'X_GET_STATUS':
       sendResponse({ success: true, data: getXTabStatus() });
@@ -178,6 +185,119 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
   }
   return true;
 });
+
+// MAIN world に注入したHLS DL関数からの進捗をsidepanelへ橋渡しする
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+
+  const data = event.data as {
+    source?: string;
+    streamId?: string;
+    status?: string;
+  };
+
+  if (data?.source !== 'SIDESCRIBE_HLS_PROGRESS') return;
+  if (!data.streamId || !data.status) return;
+
+  sendHlsProgress(data.streamId, data.status);
+});
+
+// ── HLS Download (page-context fetch) ──
+async function downloadHlsFromPage(payload: { streamId: string; url: string; pageTitle: string }) {
+  const { streamId, url, pageTitle } = payload;
+
+  sendHlsProgress(streamId, 'm3u8取得中...');
+
+  let playlistUrl = url;
+  let playlistText = await fetchTextFromPage(playlistUrl);
+  const variantUrl = selectBestVariantPlaylist(playlistText, playlistUrl);
+
+  if (variantUrl) {
+    playlistUrl = variantUrl;
+    sendHlsProgress(streamId, '最高画質プレイリスト取得中...');
+    playlistText = await fetchTextFromPage(playlistUrl);
+  }
+
+  if (playlistText.includes('#EXT-X-KEY') && playlistText.includes('METHOD=AES-128')) {
+    throw new Error('AES-128暗号化HLSはこのMVPでは未対応です');
+  }
+
+  const segmentUrls = parseSegmentUrls(playlistText, playlistUrl);
+  if (segmentUrls.length === 0) {
+    throw new Error('動画セグメントが見つかりませんでした');
+  }
+
+  sendHlsProgress(streamId, `セグメントDL開始: 0/${segmentUrls.length}`);
+  const segments = await downloadHlsSegmentsFromPage(segmentUrls, (done, total) => {
+    sendHlsProgress(streamId, `セグメントDL中: ${done}/${total}`);
+  });
+
+  sendHlsProgress(streamId, '結合中...');
+  const blob = new Blob(segments, { type: 'video/mp2t' });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = createDownloadFilename(pageTitle);
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  sendHlsProgress(streamId, `保存を開始しました: ${anchor.download}`);
+
+  return { success: true };
+}
+
+async function fetchTextFromPage(url: string): Promise<string> {
+  const response = await fetch(url, {
+    credentials: 'include',
+    referrer: window.location.href,
+  });
+  if (!response.ok) {
+    throw new Error(`取得失敗: HTTP ${response.status}`);
+  }
+  return response.text();
+}
+
+async function downloadHlsSegmentsFromPage(
+  urls: string[],
+  onProgress: (done: number, total: number) => void
+): Promise<BlobPart[]> {
+  const results = new Array<ArrayBuffer>(urls.length);
+  let nextIndex = 0;
+  let done = 0;
+  const workerCount = Math.min(4, urls.length);
+
+  async function worker() {
+    while (nextIndex < urls.length) {
+      const currentIndex = nextIndex;
+      nextIndex++;
+
+      const response = await fetch(urls[currentIndex], {
+        credentials: 'include',
+        referrer: window.location.href,
+      });
+      if (!response.ok) {
+        throw new Error(`セグメント取得失敗: ${currentIndex + 1}/${urls.length} HTTP ${response.status}`);
+      }
+
+      results[currentIndex] = await response.arrayBuffer();
+      done++;
+      onProgress(done, urls.length);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+function sendHlsProgress(streamId: string, status: string) {
+  chrome.runtime.sendMessage({
+    action: 'HLS_DOWNLOAD_PROGRESS',
+    payload: { streamId, status },
+  });
+}
 
 // ── 住信SBIネット銀行 ──
 function extractBankData(): { success: boolean; data: BankTransaction[]; period?: string; error?: string } {

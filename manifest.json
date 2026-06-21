@@ -9,7 +9,9 @@
     "storage",
     "tabs",
     "scripting",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "webRequest",
+    "downloads"
   ],
   "host_permissions": [
     "https://api.notion.com/*",
@@ -22,6 +24,9 @@
     "https://x.com/*",
     "https://twitter.com/*",
     "https://tokyo-calendar-date.jp/*"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
   ],
   "declarative_net_request": {
     "rule_resources": [

@@ -139,6 +139,22 @@
 
       </fieldset>
 
+      <!-- HLS Detection -->
+      <fieldset>
+        <legend>HLS動画検知</legend>
+        <div class="field">
+          <label for="hls-whitelist-patterns">検知対象ページ URL ホワイトリスト</label>
+          <textarea
+            id="hls-whitelist-patterns"
+            rows="5"
+            placeholder="https://learn.hotmart.com/*&#10;https://*.hotmart.com/*"
+          ></textarea>
+          <p class="hint">
+            1行に1つずつ登録。登録したページで .m3u8 が検知された場合のみ、バッジと動画タブに表示します。
+          </p>
+        </div>
+      </fieldset>
+
       <div class="actions">
         <button type="submit" class="btn btn-primary">💾 保存</button>
         <span id="save-status" class="save-status"></span>

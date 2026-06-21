@@ -1,7 +1,8 @@
-import { Message, PageInfo, SuicaTransaction, PageMemo, BankTransaction, CardBilling } from '../types';
+import { DetectedHlsStream, Message, PageInfo, SuicaTransaction, PageMemo, BankTransaction, CardBilling } from '../types';
 import { getSettings } from '../utils/storage';
 import { notion } from '../modules/notion';
 import { registerMobileWindowListeners } from './mobile-window';
+import { createDetectedHlsStream, isM3u8Url, isMissingTabError, isUrlAllowedByPatterns } from './hls-detector';
 
 // ── Side Panel をアイコンクリックで開く ──
 chrome.sidePanel
@@ -10,6 +11,9 @@ chrome.sidePanel
 
 // ── スマホ表示 自動切替（対象ドメインのウィンドウリサイズ）──
 registerMobileWindowListeners();
+
+// ── HLS 動画ソース検知 ──
+registerHlsDetectionListeners();
 
 // ログを出さない非致命的エラー
 const SILENT_ERRORS = [
@@ -51,6 +55,12 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
     case 'OPEN_OPTIONS':
       chrome.runtime.openOptionsPage();
       return { success: true };
+
+    case 'GET_DETECTED_HLS_STREAMS':
+      return getDetectedHlsStreamsForActiveTab();
+
+    case 'CLEAR_DETECTED_HLS_STREAMS':
+      return clearDetectedHlsStreamsForActiveTab();
 
     // ── Suica ──
     case 'SAVE_SUICA_TRANSACTIONS': {
@@ -192,6 +202,147 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
     default:
       return { error: `Unknown action: ${message.action}` };
   }
+}
+
+function registerHlsDetectionListeners() {
+  chrome.action.setBadgeBackgroundColor({ color: '#7c5cbf' });
+
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      void handleHlsRequest(details);
+    },
+    { urls: ['*://*/*.m3u8*'] }
+  );
+
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'loading') {
+      void clearDetectedHlsStreamsForTab(tabId);
+    }
+  });
+
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    void clearDetectedHlsStreamsForTab(tabId);
+  });
+}
+
+async function handleHlsRequest(details: chrome.webRequest.WebRequestBodyDetails) {
+  if (details.tabId < 0 || !isM3u8Url(details.url)) return;
+
+  const settings = await getSettings();
+  const whitelistPatterns = settings.hlsWhitelistPatterns || [];
+  if (whitelistPatterns.length === 0) return;
+
+  let tab: chrome.tabs.Tab;
+  try {
+    tab = await chrome.tabs.get(details.tabId);
+  } catch (err) {
+    if (isMissingTabError(err)) return;
+    throw err;
+  }
+
+  if (!tab.url || !isUrlAllowedByPatterns(tab.url, whitelistPatterns)) return;
+  const detailExtras = details as chrome.webRequest.WebRequestBodyDetails & {
+    documentUrl?: string;
+    initiator?: string;
+  };
+
+  const stream = createDetectedHlsStream({
+    requestUrl: details.url,
+    pageUrl: tab.url,
+    pageTitle: tab.title || '',
+    tabId: details.tabId,
+    frameId: details.frameId,
+    frameUrl: detailExtras.documentUrl,
+    initiator: detailExtras.initiator,
+    detectedAt: Date.now(),
+  });
+
+  await upsertDetectedHlsStream(stream);
+  void injectHlsSniffer(details.tabId, details.frameId);
+}
+
+async function injectHlsSniffer(tabId: number, frameId: number) {
+  try {
+    const [check] = await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      world: 'MAIN',
+      func: () => !!(globalThis as { __SIDESCRIBE_HLS_SNIFFER__?: { installed?: boolean } }).__SIDESCRIBE_HLS_SNIFFER__?.installed,
+    });
+    if (check?.result) return;
+
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      world: 'MAIN',
+      files: ['hls-sniffer-main.js'],
+    });
+  } catch (err) {
+    if (!isMissingTabError(err)) {
+      console.warn('[Sidescribe] HLS sniffer injection skipped:', err);
+    }
+  }
+}
+
+function getHlsStorageKey(tabId: number): string {
+  return `hlsDetectedStreams:${tabId}`;
+}
+
+async function getDetectedHlsStreamsForTab(tabId: number): Promise<DetectedHlsStream[]> {
+  const key = getHlsStorageKey(tabId);
+  const result = await chrome.storage.session.get({ [key]: [] });
+  return result[key] as DetectedHlsStream[];
+}
+
+async function setDetectedHlsStreamsForTab(tabId: number, streams: DetectedHlsStream[]) {
+  const key = getHlsStorageKey(tabId);
+  await chrome.storage.session.set({ [key]: streams });
+  await updateHlsBadge(tabId, streams.length);
+}
+
+async function upsertDetectedHlsStream(stream: DetectedHlsStream) {
+  const streams = await getDetectedHlsStreamsForTab(stream.tabId);
+  const existingIndex = streams.findIndex((item) => item.id === stream.id);
+
+  if (existingIndex >= 0) {
+    streams[existingIndex] = stream;
+  } else {
+    streams.push(stream);
+  }
+
+  await setDetectedHlsStreamsForTab(stream.tabId, streams);
+}
+
+async function getActiveTabId(): Promise<number> {
+  let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  }
+  if (!tab?.id) throw new Error('No active tab found');
+  return tab.id;
+}
+
+async function getDetectedHlsStreamsForActiveTab() {
+  const tabId = await getActiveTabId();
+  const streams = await getDetectedHlsStreamsForTab(tabId);
+  await updateHlsBadge(tabId, streams.length);
+  return { success: true, data: streams };
+}
+
+async function clearDetectedHlsStreamsForActiveTab() {
+  const tabId = await getActiveTabId();
+  await clearDetectedHlsStreamsForTab(tabId);
+  return { success: true };
+}
+
+async function clearDetectedHlsStreamsForTab(tabId: number) {
+  await chrome.storage.session.remove(getHlsStorageKey(tabId));
+  await updateHlsBadge(tabId, 0);
+}
+
+async function updateHlsBadge(tabId: number, count: number) {
+  await chrome.action.setBadgeText({
+    tabId,
+    text: count > 0 ? String(Math.min(count, 99)) : '',
+  });
 }
 
 async function getActiveTabInfo(): Promise<PageInfo> {

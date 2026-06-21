@@ -6,6 +6,7 @@ const MAPPING_KEYS = [
   'bankDbMapping',
   'cardDbMapping',
   'suicaDbMapping',
+  'calendarDbMapping',
 ];
 
 export async function getSettings(): Promise<SidescribeSettings> {
